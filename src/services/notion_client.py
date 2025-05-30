@@ -1,4 +1,5 @@
 import httpx
+import asyncio
 
 
 class NotionClient:
@@ -6,11 +7,14 @@ class NotionClient:
         self.endpoint = endpoint
         self.headers = headers
         self.database_id = database_id
-        self.client = httpx.Client()
+        self.client = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
 
-    def get_properties(self) -> dict | None:
+    async def close(self):
+        await self.client.aclose()
+
+    async def get_properties(self) -> dict | None:
         try:
-            response = self.client.get(
+            response = await self.client.get(
                 f"{self.endpoint}/databases/{self.database_id}",
                 headers=self.headers,
             )
@@ -21,15 +25,19 @@ class NotionClient:
             print(f"❌ Error fetching properties: {e}")
             return None
 
-    def create_property(
+    async def is_property_exists(self, property_name: str) -> bool:
+        properties = await self.get_properties()
+        return properties is not None and property_name in properties
+
+    async def create_property(
         self, property_name: str, property_type: str = "number"
     ) -> bool:
-        if self.is_property_exists(property_name):
+        if await self.is_property_exists(property_name):
             print(f"ℹ️ Property '{property_name}' already exists. Skipping creation.")
             return True
 
         try:
-            response = self.client.patch(
+            response = await self.client.patch(
                 f"{self.endpoint}/databases/{self.database_id}",
                 headers=self.headers,
                 json={"properties": {property_name: {property_type: {}}}},
@@ -41,14 +49,10 @@ class NotionClient:
             print(f"❌ Error creating property: {e}")
             return False
 
-    def is_property_exists(self, property_name: str) -> bool:
-        properties = self.get_properties()
-        return properties is not None and property_name in properties
-
-    def ensure_property_exists(
+    async def ensure_property_exists(
         self, property_name: str, property_type: str = "number"
     ) -> bool:
-        if self.is_property_exists(property_name):
+        if await self.is_property_exists(property_name):
             print(f"ℹ️ Property '{property_name}' already exists.")
             return True
-        return self.create_property(property_name, property_type)
+        return await self.create_property(property_name, property_type)
