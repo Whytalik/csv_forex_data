@@ -80,8 +80,10 @@ def reformat_data(input_path: Path, output_file: Path) -> Path | None:
     if output_file.exists():
         print(f"ℹ️ Reformatted file already exists: {output_file}")
         return output_file
-
     try:
+        # Extract year from input file name
+        year = input_path.stem.split("_")[-1]
+
         df = pd.read_csv(
             input_path,
             sep=";",
@@ -94,6 +96,9 @@ def reformat_data(input_path: Path, output_file: Path) -> Path | None:
                 "%Y-%m-%d %H:%M:%S"
             )
         )
+
+        # Змінюємо ім'я вихідного файлу, щоб включало рік
+        output_file = output_file.parent / f"{output_file.stem}_{year}.csv"
 
         df.to_csv(
             output_file,
@@ -109,12 +114,18 @@ def reformat_data(input_path: Path, output_file: Path) -> Path | None:
 
 
 def create_timeframes_csv(
-    input_path: Path, timeframes_dir: Path, symbol: str, year: str
+    input_path: Path, timeframes_dir: Path, symbol: str
 ) -> list[Path]:
     """
     Create OHLC data for different timeframes from input CSV file.
     Returns list of paths to created timeframe files.
     """
+    # Extract year from input file name
+    try:
+        year = input_path.stem.split("_")[-1]
+    except (ValueError, IndexError):
+        print(f"❌ Could not extract year from input file name: {input_path}")
+        return []
     try:
         timeframes_dir.mkdir(parents=True, exist_ok=True)
         created_files = []
@@ -145,7 +156,7 @@ def create_timeframes_csv(
                 # Rename columns to lowercase for consistency
                 df = df.rename(
                     columns={
-                        "Date Time": "datetime",
+                        "Date Time": "Date Time",
                         "Open": "open",
                         "High": "high",
                         "Low": "low",
@@ -153,7 +164,7 @@ def create_timeframes_csv(
                     }
                 )
                 df.set_index(
-                    "datetime", inplace=True
+                    "Date Time", inplace=True
                 )  # Resample data according to timeframe            if tf == "1w":
                 # Ensure we start with Monday 21:00 for weekly data
                 df = df.sort_index()
@@ -164,7 +175,7 @@ def create_timeframes_csv(
                     start_date = start_date + pd.Timedelta(days=days_to_next_monday)
                     # Add 21 hours to start at 21:00
                     start_date = start_date + pd.Timedelta(hours=21)
-                    df = df[df.index >= start_date]# Resample data
+                    df = df[df.index >= start_date]  # Resample data
             if tf in ["1d", "1w"]:
                 # Adjust index for daily/weekly data to start at 21:00
                 df_adjusted = df.copy()
@@ -221,14 +232,14 @@ def create_timeframes_csv(
             if tf == "1w":
                 resampled.index = resampled.index.map(
                     lambda x: f"{x.strftime('%Y-%m-%d')} to {(x + pd.Timedelta(days=6)).strftime('%Y-%m-%d')}"
-                )  # Save to CSV with increased precision
+                )
             resampled.to_csv(
                 output_file,
                 sep=",",
                 index=True,
                 header=["Open", "High", "Low", "Close"],
                 date_format="%Y-%m-%d %H:%M:%S" if tf != "1w" else None,
-                float_format="%.5f",  # Збільшуємо точність до 5 знаків після коми
+                float_format="%.5f",
             )
 
             print(f"✅ Created {tf} timeframe data for {symbol} ({year})")

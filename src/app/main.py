@@ -1,4 +1,11 @@
+import sys
 from pathlib import Path
+
+# Add src directory to Python path
+src_path = Path(__file__).parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 import asyncio
 from services.csv_service import (
     collect_csv_files,
@@ -20,13 +27,13 @@ from services.metrics_service import MetricsService
 
 
 async def process_data_and_calculate_metrics():
-    """Process raw data, create timeframes and calculate metrics"""
-    raw_data_root = Path(DATA_PATH["raw_data_path"])
-    processed_data_root = Path(DATA_PATH["processed_data_path"])
-    formatted_data_root = Path(DATA_PATH["formated_data_path"])
-    timeframes_data_root = Path(DATA_PATH["timeframes_data_path"])
+    src_path = Path(__file__).parent.parent
 
-    # Create necessary directories
+    raw_data_root = src_path / DATA_PATH["raw_data_path"]
+    processed_data_root = src_path / DATA_PATH["processed_data_path"]
+    formatted_data_root = src_path / DATA_PATH["formated_data_path"]
+    timeframes_data_root = src_path / DATA_PATH["timeframes_data_path"]
+
     formatted_data_root.mkdir(parents=True, exist_ok=True)
     processed_data_root.mkdir(parents=True, exist_ok=True)
     timeframes_data_root.mkdir(parents=True, exist_ok=True)
@@ -40,16 +47,15 @@ async def process_data_and_calculate_metrics():
 
             collected_files = collect_csv_files(subdir)
             merged_file = merge_csv_files(collected_files, processed_data_root, symbol)
-
             if merged_file is not None:
-                formatted_file = formatted_data_root / f"{symbol}_formatted.csv"
+                # Extract year from merged file
+                year = merged_file.stem.split("_")[-1]
+                formatted_file = formatted_data_root / f"{symbol}_formatted_{year}.csv"
                 formatted_path = reformat_data(merged_file, formatted_file)
 
                 if formatted_path:
                     print(f"Successfully processed {symbol} data")
-                    timeframes_files = create_timeframes_csv(
-                        formatted_path, timeframes_data_root, symbol
-                    )
+                    create_timeframes_csv(formatted_path, timeframes_data_root, symbol)
 
                     metrics_service = MetricsService(timeframes_data_root)
                     metrics = metrics_service.calculate_all_metrics(symbol)
