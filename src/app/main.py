@@ -81,7 +81,13 @@ async def upload_metrics_to_notion(metrics: dict):
 
             for symbol, symbol_metrics in metrics.items():
                 print(f"Uploading metrics for {symbol} to {profile}'s Notion database")
-                # TODO: Add actual upload logic here
+                for group, metrics in NOTION_METRICS.items():
+                    for metric in metrics:
+                        if metric in symbol_metrics:
+                            value = symbol_metrics[metric]
+                            """await notion_client.upload_metric(
+                                symbol, group, metric, value
+                            )"""
 
             await notion_client.close()
             print(f"✅ Successfully processed metrics for {profile}")

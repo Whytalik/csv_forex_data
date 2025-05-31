@@ -29,17 +29,21 @@ class NotionClient:
         return properties is not None and property_name in properties
 
     async def create_property(
-        self, property_name: str, property_type: str = "number"
+        self, property_name: str, property_type: str = "number", formula: dict = None
     ) -> bool:
         if await self.is_property_exists(property_name):
             print(f"ℹ️ Property '{property_name}' already exists. Skipping creation.")
             return True
 
         try:
+            properties = {property_name: {property_type: {}}}
+            if property_type == "formula" and formula:
+                properties[property_name] = {"formula": formula}
+
             response = await self.client.patch(
                 f"{self.endpoint}/databases/{self.database_id}",
                 headers=self.headers,
-                json={"properties": {property_name: {property_type: {}}}},
+                json={"properties": properties},
             )
             response.raise_for_status()
             print(f"✅ Created property: {property_name}")
@@ -55,3 +59,24 @@ class NotionClient:
             print(f"ℹ️ Property '{property_name}' already exists.")
             return True
         return await self.create_property(property_name, property_type)
+
+    async def upload_metric(
+        self, symbol: str, group: str, metric: str, value: float
+    ) -> bool:
+        try:
+            data = {
+                "parent": {"database_id": self.database_id},
+                "properties": {
+                    "Symbol": {"title": [{"text": {"content": symbol}}]},
+                    group: {metric: {"number": value}},
+                },
+            }
+            response = await self.client.post(
+                f"{self.endpoint}/pages", headers=self.headers, json=data
+            )
+            response.raise_for_status()
+            print(f"✅ Uploaded metric '{metric}' for {symbol} in group '{group}'")
+            return True
+        except httpx.HTTPError as e:
+            print(f"❌ Error uploading metric '{metric}' for {symbol}: {e}")
+            return False
