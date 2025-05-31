@@ -154,36 +154,59 @@ def create_timeframes_csv(
                 )
                 df.set_index(
                     "datetime", inplace=True
-                )  # Resample data according to timeframe
-            if tf == "1w":
-                # Ensure we start with Monday for weekly data
+                )  # Resample data according to timeframe            if tf == "1w":
+                # Ensure we start with Monday 21:00 for weekly data
                 df = df.sort_index()
                 start_date = df.index[0].normalize()
                 if start_date.weekday() != 0:  # If not Monday
                     # Find next Monday
                     days_to_next_monday = (7 - start_date.weekday()) % 7
                     start_date = start_date + pd.Timedelta(days=days_to_next_monday)
-                    df = df[df.index >= start_date]
-
-            # Resample data
-            resampled = (
-                df.resample(
-                    TIMEFRAME_MAP[tf],
-                    origin="start",
-                    offset="1min",
-                    closed="left",  # Include left boundary
-                    label="left",  # Use left boundary for labeling
+                    # Add 21 hours to start at 21:00
+                    start_date = start_date + pd.Timedelta(hours=21)
+                    df = df[df.index >= start_date]# Resample data
+            if tf in ["1d", "1w"]:
+                # Adjust index for daily/weekly data to start at 21:00
+                df_adjusted = df.copy()
+                df_adjusted.index = df_adjusted.index - pd.Timedelta(hours=21)
+                resampled = (
+                    df_adjusted.resample(
+                        TIMEFRAME_MAP[tf],
+                        origin="start",
+                        closed="left",
+                        label="left",
+                    )
+                    .agg(
+                        {
+                            "open": "first",
+                            "high": "max",
+                            "low": "min",
+                            "close": "last",
+                        }
+                    )
+                    .dropna()
                 )
-                .agg(
-                    {
-                        "open": "first",
-                        "high": "max",
-                        "low": "min",
-                        "close": "last",
-                    }
+                # Adjust index back
+                resampled.index = resampled.index + pd.Timedelta(hours=21)
+            else:
+                resampled = (
+                    df.resample(
+                        TIMEFRAME_MAP[tf],
+                        origin="start",
+                        offset="1min",
+                        closed="left",
+                        label="left",
+                    )
+                    .agg(
+                        {
+                            "open": "first",
+                            "high": "max",
+                            "low": "min",
+                            "close": "last",
+                        }
+                    )
+                    .dropna()
                 )
-                .dropna()
-            )
 
             if tf == "1w":
                 resampled = resampled[
