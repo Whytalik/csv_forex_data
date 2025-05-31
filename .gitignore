@@ -56,5 +56,11 @@ dist/
 *.whl
 *.tar.gz
 
+# Data files
+src/data/raw/**/*.csv
+src/data/processed/**/*.csv
+src/data/formatted/**/*.csv
+src/data/timeframes/**/*.csv
+
 # Notebook metadata (optional)
 *.nbmetadata
