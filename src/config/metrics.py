@@ -1,4 +1,5 @@
-NOTION_METRICS = {
+# Базовий набір метрик
+BASE_METRICS = {
     "Volatility & Range Metrics": [
         "Average Daily Range (pips)",
         "Average Daily Body Size (pips)",
@@ -87,3 +88,54 @@ NOTION_METRICS = {
         "Date Range",
     ],
 }
+
+WHYTALIK_EXTRA_METRICS = {
+    "Volatility & Range Metrics": [],
+    "Custom Metrics": [],
+}
+
+MORDAN_EXTRA_METRICS = {
+    "Volatility & Range Metrics": [],
+    "Custom Metrics": [],
+}
+
+PROFILE_METRICS = {
+    "Whytalik": {
+        "Volatility & Range Metrics": BASE_METRICS["Volatility & Range Metrics"],
+        "High/Low Timing Distribution (per Session)": BASE_METRICS[
+            "High/Low Timing Distribution (per Session)"
+        ],
+        "Intraday Interval High/Low Percentages": BASE_METRICS[
+            "Intraday Interval High/Low Percentages"
+        ],
+        "Bullish / Bearish Specific Metrics": BASE_METRICS[
+            "Bullish / Bearish Specific Metrics"
+        ],
+        "Daily/Weekly Occurrence Statistics": BASE_METRICS[
+            "Daily/Weekly Occurrence Statistics"
+        ],
+        "Aggregated / Thematic Metrics": BASE_METRICS["Aggregated / Thematic Metrics"],
+    },
+    "MORDAN": {
+        "Volatility & Range Metrics": BASE_METRICS["Volatility & Range Metrics"],
+        "High/Low Timing Distribution (per Session)": BASE_METRICS[
+            "High/Low Timing Distribution (per Session)"
+        ],
+        "Intraday Interval High/Low Percentages": BASE_METRICS[
+            "Intraday Interval High/Low Percentages"
+        ],
+        "Bullish / Bearish Specific Metrics": BASE_METRICS[
+            "Bullish / Bearish Specific Metrics"
+        ],
+        "Daily/Weekly Occurrence Statistics": BASE_METRICS[
+            "Daily/Weekly Occurrence Statistics"
+        ],
+        "Aggregated / Thematic Metrics": BASE_METRICS["Aggregated / Thematic Metrics"],
+    },
+}
+
+
+def get_metrics_for_profile(profile: str) -> dict:
+    if profile not in PROFILE_METRICS:
+        raise ValueError(f"Unknown profile: {profile}")
+    return PROFILE_METRICS[profile]

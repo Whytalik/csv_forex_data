@@ -14,7 +14,7 @@ from services.csv_service import (
     create_timeframes_csv,
 )
 from config.settings import DATA_PATH
-from config.metrics import NOTION_METRICS
+from config.metrics import get_metrics_for_profile
 from config.timeframes_config import TIMEFRAMES
 from services.notion_client import NotionClient
 from config.notion_settings import (
@@ -74,10 +74,10 @@ async def upload_metrics_to_notion(metrics: dict):
             headers = get_headers(profile)
             database_id = get_database_id(profile)
             notion_client = NotionClient(NOTION_ENDPOINT, headers, database_id)
-
             print("Ensuring all properties exist...")
-            for group in NOTION_METRICS:
-                for metric in NOTION_METRICS[group]:
+            profile_metrics = get_metrics_for_profile(profile)
+            for group in profile_metrics:
+                for metric in profile_metrics[group]:
                     metric_type = "rich_text" if metric == "Date Range" else "number"
                     await notion_client.ensure_property_exists(metric, metric_type)
             print("Checking existing symbols in database...")
