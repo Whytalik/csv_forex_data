@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Dict, Any
-from config.metrics import NOTION_METRICS
+from config.metrics import BASE_METRICS
 from .metric_calculators import (
     VolatilityMetrics,
     SessionDistributionMetrics,

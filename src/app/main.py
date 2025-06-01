@@ -80,19 +80,10 @@ async def upload_metrics_to_notion(metrics: dict):
                 for metric in profile_metrics[group]:
                     metric_type = "rich_text" if metric == "Date Range" else "number"
                     await notion_client.ensure_property_exists(metric, metric_type)
-            print("Checking existing symbols in database...")
-            response = await notion_client.query_database({"page_size": 100})
-            existing_symbols = {
-                page.get("properties", {})
-                .get("title", [])[0]
-                .get("text", {})
-                .get("content", "")
-                .upper()
-                for page in response.get("results", [])
-            }
 
+            print("Checking existing symbols in database...")
             for symbol, symbol_metrics in metrics.items():
-                if symbol.upper() not in existing_symbols:
+                if not await notion_client.is_symbol_exists(symbol.upper()):
                     print(f"⚠️ Skipping {symbol} - not found in {profile}'s database")
                     continue
 

@@ -103,3 +103,19 @@ class NotionClient:
         except httpx.HTTPError as e:
             print(f"❌ Error uploading metric '{metric}' for {symbol}: {e}")
             return False
+
+    async def is_symbol_exists(self, symbol: str) -> bool:
+        try:
+            response = await self.client.post(
+                f"{self.endpoint}/databases/{self.database_id}/query",
+                headers=self.headers,
+                json={
+                    "filter": {"property": "title", "title": {"equals": symbol.upper()}}
+                },
+            )
+            response.raise_for_status()
+            pages = response.json().get("results", [])
+            return len(pages) > 0
+        except httpx.HTTPError as e:
+            print(f"❌ Error checking if symbol exists: {e}")
+            return False
