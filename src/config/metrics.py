@@ -10,6 +10,11 @@ BASE_METRICS = {
         "Average London Range",
         "Average Lunch Range",
         "Average NY Range",
+        "Average Monday Range",
+        "Average Tuesday Range",
+        "Average Wednesday Range",
+        "Average Thursday Range",
+        "Average Friday Range",
     ],
     "High/Low Timing Distribution (per Session)": [
         "Daily High in Asia %",

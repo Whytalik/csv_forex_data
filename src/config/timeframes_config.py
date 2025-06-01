@@ -1,6 +1,7 @@
-TIMEFRAMES = ["1w", "1d", "4h", "1h", "15m", "5m"]
+TIMEFRAMES = ["1w", "1d", "4h", "1h", "15m", "5m", "1m"]
 
 TIMEFRAME_MAP = {
+    "1m": "1min",
     "5m": "5min",
     "15m": "15min",
     "1h": "1h",

@@ -9,7 +9,7 @@ PAIRS = {
     },
     "USDJPY": {
         "name": "USD/JPY",
-        "pip_factor": 100,  # JPY pairs use different pip factor
+        "pip_factor": 100,
     },
     "USDCHF": {
         "name": "USD/CHF",

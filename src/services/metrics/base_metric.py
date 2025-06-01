@@ -1,12 +1,11 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-import pandas as pd
+import pandas as pd # type: ignore
 
 
-class BaseMetric(ABC):
+class BaseMetric(ABC):    
     def __init__(self, timeframes_dir: Path):
         self.timeframes_dir = timeframes_dir
-
     def filter_anomalies(
         self, df: pd.DataFrame, columns: list[str], n_std: float = 3
     ) -> pd.DataFrame:
@@ -17,20 +16,17 @@ class BaseMetric(ABC):
         :param n_std: Number of standard deviations to use as threshold (default 3)
         :return: Filtered DataFrame
         """
-        df_filtered = df.copy()
+        filtered_data = df.copy()
+        combined_mask = pd.Series(True, index=df.index)
 
         for column in columns:
             mean = df[column].mean()
             std = df[column].std()
+            column_mask = (df[column] >= mean - n_std * std) & (df[column] <= mean + n_std * std)
+            combined_mask &= column_mask
 
-            # Create mask for values within n standard deviations
-            mask = (
-                (df[column] > mean - n_std * std)
-                & (df[column] < mean + n_std * std)
-            )
-            df_filtered = df_filtered[mask]
-
-        return df_filtered
+        filtered_data = filtered_data[combined_mask]
+        return filtered_data
 
     def load_timeframe_data(
         self, symbol: str, year: str, timeframe: str
@@ -48,8 +44,7 @@ class BaseMetric(ABC):
             file_path, parse_dates=["Date Time"] if timeframe != "1w" else None
         )
 
-        # Filter anomalies for OHLC columns with different thresholds
-        std_threshold = 5 if timeframe == "1w" else 3  # Більший поріг для тижневих даних
+        std_threshold = 5 if timeframe == "1w" else 3
         df = self.filter_anomalies(df, ["Open", "High", "Low", "Close"], std_threshold)
         
         if timeframe != "1w":

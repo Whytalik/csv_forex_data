@@ -1,5 +1,5 @@
 from pathlib import Path
-import pandas as pd
+import pandas as pd  # type: ignore
 from datetime import datetime
 from config.timeframes_config import TIMEFRAMES, TIMEFRAME_MAP
 
@@ -81,24 +81,17 @@ def reformat_data(input_path: Path, output_file: Path) -> Path | None:
         print(f"ℹ️ Reformatted file already exists: {output_file}")
         return output_file
     try:
-        # Extract year from input file name
-        year = input_path.stem.split("_")[-1]
-
         df = pd.read_csv(
             input_path,
             sep=";",
             header=None,
             names=["datetime", "open", "high", "low", "close"],
         )
-
         df["datetime"] = df["datetime"].apply(
-            lambda x: datetime.strptime(str(x), "%Y%m%d %H%M%S").strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
+            lambda x: (
+                datetime.strptime(str(x), "%Y%m%d %H%M%S") + pd.Timedelta(days=1)
+            ).strftime("%Y-%m-%d %H:%M:%S")
         )
-
-        # Змінюємо ім'я вихідного файлу, щоб включало рік
-        output_file = output_file.parent / f"{output_file.stem}_{year}.csv"
 
         df.to_csv(
             output_file,
@@ -163,42 +156,38 @@ def create_timeframes_csv(
                         "Close": "close",
                     }
                 )
-                df.set_index(
-                    "Date Time", inplace=True
-                )  # Resample data according to timeframe            if tf == "1w":
-                # Ensure we start with Monday 21:00 for weekly data
-                df = df.sort_index()
-                start_date = df.index[0].normalize()
-                if start_date.weekday() != 0:  # If not Monday
-                    # Find next Monday
-                    days_to_next_monday = (7 - start_date.weekday()) % 7
-                    start_date = start_date + pd.Timedelta(days=days_to_next_monday)
-                    # Add 21 hours to start at 21:00
-                    start_date = start_date + pd.Timedelta(hours=21)
-                    df = df[df.index >= start_date]  # Resample data
-            if tf in ["1d", "1w"]:
-                # Adjust index for daily/weekly data to start at 21:00
-                df_adjusted = df.copy()
-                df_adjusted.index = df_adjusted.index - pd.Timedelta(hours=21)
-                resampled = (
-                    df_adjusted.resample(
-                        TIMEFRAME_MAP[tf],
-                        origin="start",
-                        closed="left",
-                        label="left",
-                    )
-                    .agg(
-                        {
-                            "open": "first",
-                            "high": "max",
-                            "low": "min",
-                            "close": "last",
-                        }
-                    )
-                    .dropna()
-                )
-                # Adjust index back
-                resampled.index = resampled.index + pd.Timedelta(hours=21)
+                df.set_index("Date Time", inplace=True)
+
+                if tf == "1w":
+                    df = df.sort_index()
+                    start_date = df.index[0].normalize()
+                    if start_date.weekday() != 0:
+                        days_to_next_monday = (7 - start_date.weekday()) % 7
+                        start_date = start_date + pd.Timedelta(days=days_to_next_monday)
+                        start_date = start_date + pd.Timedelta(hours=21)
+                        df = df[df.index >= start_date]
+                        if tf in ["1d", "1w"]:
+                            df_adjusted = df.copy()
+                            df_adjusted.index = df_adjusted.index - pd.Timedelta(
+                                hours=21
+                            )
+                            resampled = (
+                                df_adjusted.resample(
+                                    TIMEFRAME_MAP[tf],
+                                    origin="start",
+                                    closed="left",
+                                    label="left",
+                                )
+                                .agg(
+                                    {
+                                        "open": "first",
+                                        "high": "max",
+                                        "low": "min",
+                                        "close": "last",
+                                    }
+                                )
+                                .dropna()
+                            )
             else:
                 resampled = (
                     df.resample(
@@ -228,17 +217,23 @@ def create_timeframes_csv(
                         >= 5
                     )
                 ]
+                if tf == "1w":
+                    resampled.index = resampled.index.map(
+                        lambda x: f"{x.strftime('%Y-%m-%d')} to {(x + pd.Timedelta(days=6)).strftime('%Y-%m-%d')}"
+                    )
+                elif tf == "1d":
+                    resampled.index = pd.to_datetime(resampled.index.date)
 
-            if tf == "1w":
-                resampled.index = resampled.index.map(
-                    lambda x: f"{x.strftime('%Y-%m-%d')} to {(x + pd.Timedelta(days=6)).strftime('%Y-%m-%d')}"
-                )
             resampled.to_csv(
                 output_file,
                 sep=",",
                 index=True,
                 header=["Open", "High", "Low", "Close"],
-                date_format="%Y-%m-%d %H:%M:%S" if tf != "1w" else None,
+                date_format=(
+                    "%Y-%m-%d"
+                    if tf == "1d"
+                    else ("%Y-%m-%d %H:%M:%S" if tf != "1w" else None)
+                ),
                 float_format="%.5f",
             )
 
