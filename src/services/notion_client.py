@@ -60,23 +60,46 @@ class NotionClient:
             return True
         return await self.create_property(property_name, property_type)
 
-    async def upload_metric(
-        self, symbol: str, group: str, metric: str, value: float
-    ) -> bool:
+    async def upload_metric(self, symbol: str, metric: str, value: float | str) -> bool:
         try:
-            data = {
-                "parent": {"database_id": self.database_id},
-                "properties": {
-                    "Symbol": {"title": [{"text": {"content": symbol}}]},
-                    group: {metric: {"number": value}},
-                },
-            }
+            # Спочатку знаходимо сторінку для даної валютної пари
             response = await self.client.post(
-                f"{self.endpoint}/pages", headers=self.headers, json=data
+                f"{self.endpoint}/databases/{self.database_id}/query",
+                headers=self.headers,
+                json={
+                    "filter": {"property": "title", "title": {"equals": symbol.upper()}}
+                },
             )
             response.raise_for_status()
-            print(f"✅ Uploaded metric '{metric}' for {symbol} in group '{group}'")
+            pages = response.json().get("results", [])
+
+            if not pages:
+                print(f"❌ No page found for symbol {symbol}")
+                return False
+
+            page_id = pages[0]["id"]
+            if metric == "Date Range":
+                property_value = {
+                    "rich_text": [
+                        {
+                            "text": {"content": str(value)},
+                            "annotations": {"bold": True, "color": "pink"},
+                        }
+                    ]
+                }
+            else:
+                property_value = {"number": float(value)}
+
+            # Оновлюємо властивість метрики для знайденої сторінки
+            data = {"properties": {metric: property_value}}
+
+            response = await self.client.patch(
+                f"{self.endpoint}/pages/{page_id}", headers=self.headers, json=data
+            )
+            response.raise_for_status()
+            print(f"✅ Updated metric '{metric}' for {symbol}")
             return True
+
         except httpx.HTTPError as e:
             print(f"❌ Error uploading metric '{metric}' for {symbol}: {e}")
             return False
