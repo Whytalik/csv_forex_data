@@ -1,13 +1,11 @@
 from pathlib import Path
 from typing import Dict, Any
 from config.metrics import BASE_METRICS
-from .metric_calculators import (
-    VolatilityMetrics,
-    SessionDistributionMetrics,
-    IntradayMetrics,
-    DirectionalMetrics,
-    OccurrenceMetrics,
-)
+from .calculators.volatility_metrics import VolatilityMetrics
+from .calculators.session_distribution_metrics import SessionDistributionMetrics
+from .calculators.intraday_metrics import IntradayMetrics
+from .calculators.directional_metrics import DirectionalMetrics
+from .calculators.occurrence_metrics import OccurrenceMetrics
 
 
 class MetricsManager:
@@ -27,7 +25,7 @@ class MetricsManager:
         """Calculate all metrics for a given symbol and year"""
         all_metrics = {}
 
-        for group, calculator in self.calculators.items():
+        for name, calculator in self.calculators.items():
             metrics = calculator.calculate(symbol, year)
             all_metrics.update(metrics)
 
