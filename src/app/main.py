@@ -52,8 +52,7 @@ async def process_data_and_calculate_metrics():
 
                 if formatted_path:
                     print(f"Successfully processed {symbol} data")
-                    create_timeframes_csv(formatted_path, timeframes_data_root, symbol)
-
+                    create_timeframes_csv(formatted_path, timeframes_data_root, symbol)                    
                     metrics_service = MetricsService(timeframes_data_root)
                     metrics = metrics_service.calculate_all_metrics(symbol)
 
@@ -73,8 +72,8 @@ async def upload_metrics_to_notion(metrics: dict):
             notion_client = NotionClient(NOTION_ENDPOINT, headers, database_id)
             print("Ensuring all properties exist...")
             profile_metrics = get_metrics_for_profile(profile)
-            for group in profile_metrics:
-                for metric in profile_metrics[group]:
+            for category, metrics_list in profile_metrics.items():
+                for metric in metrics_list:
                     metric_type = "rich_text" if metric == "Date Range" else "number"
                     await notion_client.ensure_property_exists(metric, metric_type)
 
@@ -82,15 +81,16 @@ async def upload_metrics_to_notion(metrics: dict):
             for symbol, symbol_metrics in metrics.items():
                 if not await notion_client.is_symbol_exists(symbol.upper()):
                     print(f"⚠️ Skipping {symbol} - not found in {profile}'s database")
-                    continue
-
+                    continue                
                 print(f"\nUploading metrics for {symbol}...")
-                for group, group_metrics in symbol_metrics.items():
-                    if isinstance(group_metrics, dict):
-                        for metric_name, value in group_metrics.items():
-                            await notion_client.upload_metric(
-                                symbol, metric_name, value
-                            )
+                profile_metrics_config = get_metrics_for_profile(profile)
+                for category, metrics_list in profile_metrics_config.items():
+                    if category in symbol_metrics and isinstance(symbol_metrics[category], dict):
+                        for metric_name, value in symbol_metrics[category].items():
+                            if metric_name in metrics_list:
+                                await notion_client.upload_metric(
+                                    symbol, metric_name, value
+                                )
 
             await notion_client.close()
             print(f"✅ Successfully processed metrics for {profile}")

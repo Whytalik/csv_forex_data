@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Dict, Any
-from config.metrics import BASE_METRICS
+from config.metrics import get_metrics_for_profile
 from services.metrics.metrics_manager import MetricsManager
 
 
@@ -21,19 +21,23 @@ class MetricsService:
     def calculate_all_metrics(self, symbol: str) -> Dict[str, Dict[str, Any]]:
         """Calculate all available metrics for a symbol"""
         year = self._extract_year_from_file(symbol)
-        all_metrics = self.metrics_manager.calculate_all_metrics(symbol, year)
+        return self.metrics_manager.calculate_all_metrics(symbol, year)
 
+    def calculate_metrics_for_profile(self, symbol: str, profile: str) -> Dict[str, Dict[str, Any]]:
+        """Calculate metrics for a specific profile"""
+        year = self._extract_year_from_file(symbol)
+        all_metrics = self.metrics_manager.calculate_all_metrics(symbol, year)
+        
+        # Get profile-specific metrics configuration
+        profile_metrics = get_metrics_for_profile(profile)
+        
+        # Filter metrics based on profile configuration
         grouped_metrics = {}
-        for group, metrics_list in BASE_METRICS.items():
-            group_metrics = {
+        for category, metrics_list in profile_metrics.items():
+            category_metrics = {
                 key: value for key, value in all_metrics.items() if key in metrics_list
             }
-            if group_metrics:
-                grouped_metrics[group] = group_metrics
-
-        if "Date Range" in all_metrics:
-            grouped_metrics["Aggregated / Thematic Metrics"] = {
-                "Date Range": all_metrics["Date Range"]
-            }
-
+            if category_metrics:
+                grouped_metrics[category] = category_metrics
+        
         return grouped_metrics

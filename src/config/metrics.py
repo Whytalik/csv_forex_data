@@ -1,146 +1,402 @@
-# Базовий набір метрик
-BASE_METRICS = {
-    "Volatility & Range Metrics": [
-        "Average Daily Range (pips)",
-        "Average Daily Body Size (pips)",
-        "Average Weekly Range (pips)",
-        "Average Weekly Body Size (pips)",
-        "Average Asia Range",
-        "Average Frankfurt Range",
-        "Average London Range",
-        "Average Lunch Range",
-        "Average NY Range",
-        "Average Monday Range",
-        "Average Tuesday Range",
-        "Average Wednesday Range",
-        "Average Thursday Range",
-        "Average Friday Range",
-    ],
-    "High/Low Timing Distribution (per Session)": [
-        "Daily High in Asia %",
-        "Daily High in Frankfurt %",
-        "Daily High in London %",
-        "Daily High in Lunch %",
-        "Daily High in NY %",
-        "Daily High in Out of Session %",
-        "Daily Low in Asia %",
-        "Daily Low in Frankfurt %",
-        "Daily Low in London %",
-        "Daily Low in NY %",
-        "Daily Low in Lunch %",
-        "Daily Low in Out of Session %",
-    ],
-    "Intraday Interval High/Low Percentages": [
-        "Frankfurt-Asia High %",
-        "Frankfurt-Asia Low %",
-        "London-Asia High %",
-        "London-Asia Low %",
-        "London-Frankfurt High %",
-        "London-Frankfurt Low %",
-        "Lunch-Asia High %",
-        "Lunch-Asia Low %",
-        "Lunch-London High %",
-        "Lunch-London Low %",
-        "Lunch-Frankfurt High %",
-        "Lunch-Frankfurt Low %",
-        "NY-Asia High %",
-        "NY-Asia Low %",
-        "NY-Frankfurt High %",
-        "NY-Frankfurt Low %",
-        "NY-London High %",
-        "NY-London Low %",
-        "NY-Lunch High %",
-        "NY-Lunch Low %",
-    ],
-    "Bullish / Bearish Specific Metrics": [
-        "Bullish Frankfurt-Asia Low %",
-        "Bullish London-Asia Low %",
-        "Bullish London-Frankfurt Low %",
-        "Bullish Lunch-Asia Low %",
-        "Bullish Lunch-Frankfurt Low %",
-        "Bullish Lunch-London Low %",
-        "Bullish NY-Asia Low %",
-        "Bullish NY-Frankfurt Low %",
-        "Bullish NY-London Low %",
-        "Bullish NY-Lunch Low %",
-        "Bearish Frankfurt-Asia High %",
-        "Bearish London-Asia High %",
-        "Bearish London-Frankfurt High %",
-        "Bearish Lunch-Asia High %",
-        "Bearish Lunch-Frankfurt High %",
-        "Bearish Lunch-London High %",
-        "Bearish NY-Asia High %",
-        "Bearish NY-Frankfurt High %",
-        "Bearish NY-London High %",
-        "Bearish NY-Lunch High %",
-    ],
-    "Daily/Weekly Occurrence Statistics": [
-        "High in Monday",
-        "High in Tuesday",
-        "High in Wednesday",
-        "High in Thursday",
-        "High in Friday",
-        "Low in Monday",
-        "Low in Tuesday",
-        "Low in Wednesday",
-        "Low in Thursday",
-        "Low in Friday",
-        "PDH Probability",
-        "PDL Probability",
-        "PD Levels Probability",
-    ],
-    "Aggregated / Thematic Metrics": [
-        "Date Range",
-    ],
-}
 
-WHYTALIK_EXTRA_METRICS = {
-    "Volatility & Range Metrics": [],
-    "Custom Metrics": [],
-}
-
-MORDAN_EXTRA_METRICS = {
-    "Volatility & Range Metrics": [],
-    "Custom Metrics": [],
-}
-
-PROFILE_METRICS = {
-    "Whytalik": {
-        "Volatility & Range Metrics": BASE_METRICS["Volatility & Range Metrics"],
-        "High/Low Timing Distribution (per Session)": BASE_METRICS[
-            "High/Low Timing Distribution (per Session)"
-        ],
-        "Intraday Interval High/Low Percentages": BASE_METRICS[
-            "Intraday Interval High/Low Percentages"
-        ],
-        "Bullish / Bearish Specific Metrics": BASE_METRICS[
-            "Bullish / Bearish Specific Metrics"
-        ],
-        "Daily/Weekly Occurrence Statistics": BASE_METRICS[
-            "Daily/Weekly Occurrence Statistics"
-        ],
-        "Aggregated / Thematic Metrics": BASE_METRICS["Aggregated / Thematic Metrics"],
+# Конфіг метрик - для кожної метрики вказано в яких профілях вона доступна
+METRICS_CONFIG = {
+    # Volatility & Range Metrics
+    "Average Daily Range (pips)": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
     },
-    "MORDAN": {
-        "Volatility & Range Metrics": BASE_METRICS["Volatility & Range Metrics"],
-        "High/Low Timing Distribution (per Session)": BASE_METRICS[
-            "High/Low Timing Distribution (per Session)"
-        ],
-        "Intraday Interval High/Low Percentages": BASE_METRICS[
-            "Intraday Interval High/Low Percentages"
-        ],
-        "Bullish / Bearish Specific Metrics": BASE_METRICS[
-            "Bullish / Bearish Specific Metrics"
-        ],
-        "Daily/Weekly Occurrence Statistics": BASE_METRICS[
-            "Daily/Weekly Occurrence Statistics"
-        ],
-        "Aggregated / Thematic Metrics": BASE_METRICS["Aggregated / Thematic Metrics"],
+    "Average Daily Body Size (pips)": {
+        "category": "Volatility & Range Metrics", 
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Average Weekly Range (pips)": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Average Weekly Body Size (pips)": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Average Asia Range": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Average Frankfurt Range": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Average London Range": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Average Lunch Range": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik"]
+    },
+    "Average NY Range": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Average Monday Range": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Infobase"]
+    },
+    "Average Tuesday Range": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Infobase"]
+    },
+    "Average Wednesday Range": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Infobase"]
+    },
+    "Average Thursday Range": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Infobase"]
+    },
+    "Average Friday Range": {
+        "category": "Volatility & Range Metrics",
+        "profiles": ["Whytalik", "Infobase"]
+    },
+    
+    # High/Low Timing Distribution (per Session)
+    "Daily High in Asia %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Daily High in Frankfurt %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Daily High in London %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Daily High in Lunch %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Whytalik"]
+    },
+    "Daily High in NY %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Daily High in Out of Session %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Mordan", "Infobase"]
+    },
+    "Daily Low in Asia %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Daily Low in Frankfurt %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Daily Low in London %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Daily Low in NY %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Daily Low in Lunch %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Whytalik"]
+    },
+    "Daily Low in Out of Session %": {
+        "category": "High/Low Timing Distribution (per Session)",
+        "profiles": ["Mordan", "Infobase"]
+    },    
+    # Intraday Interval High/Low Percentages
+    "Frankfurt-Asia High %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Frankfurt-Asia Low %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "London-Asia High %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "London-Asia Low %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "London-Frankfurt High %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "London-Frankfurt Low %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Lunch-Asia High %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik"]
+    },
+    "Lunch-Asia Low %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik"]
+    },
+    "Lunch-London High %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik"]
+    },
+    "Lunch-London Low %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik"]
+    },
+    "Lunch-Frankfurt High %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik"]
+    },
+    "Lunch-Frankfurt Low %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik"]
+    },
+    "NY-Asia High %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "NY-Asia Low %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "NY-Frankfurt High %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "NY-Frankfurt Low %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "NY-London High %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "NY-London Low %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "NY-Lunch High %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik"]
+    },
+    "NY-Lunch Low %": {
+        "category": "Intraday Interval High/Low Percentages",
+        "profiles": ["Whytalik"]
+    },    
+    # Bullish / Bearish Specific Metrics
+    "Bullish Frankfurt-Asia Low %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Bullish London-Asia Low %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Bullish London-Frankfurt Low %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Bullish Lunch-Asia Low %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik"]
+    },
+    "Bullish Lunch-Frankfurt Low %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik"]
+    },
+    "Bullish Lunch-London Low %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik"]
+    },
+    "Bullish NY-Asia Low %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Bullish NY-Frankfurt Low %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Bullish NY-London Low %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Bullish NY-Lunch Low %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik"]
+    },
+    "Bearish Frankfurt-Asia High %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Bearish London-Asia High %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Bearish London-Frankfurt High %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Bearish Lunch-Asia High %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik"]
+    },
+    "Bearish Lunch-Frankfurt High %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik"]
+    },
+    "Bearish Lunch-London High %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik"]
+    },
+    "Bearish NY-Asia High %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Bearish NY-Frankfurt High %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "Bearish NY-London High %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Bearish NY-Lunch High %": {
+        "category": "Bullish / Bearish Specific Metrics",
+        "profiles": ["Whytalik"]
+    },    
+    # Daily/Weekly Occurrence Statistics
+    "High in Monday": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "High in Tuesday": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "High in Wednesday": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "High in Thursday": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "High in Friday": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Low in Monday": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Low in Tuesday": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Low in Wednesday": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Low in Thursday": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "Low in Friday": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
+    },
+    "PDH Probability": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "PDL Probability": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    "PD Levels Probability": {
+        "category": "Daily/Weekly Occurrence Statistics",
+        "profiles": ["Whytalik", "Mordan"]
+    },
+    
+    # Aggregated / Thematic Metrics
+    "Date Range": {
+        "category": "Aggregated / Thematic Metrics",
+        "profiles": ["Whytalik", "Mordan", "Infobase"]
     },
 }
 
 
 def get_metrics_for_profile(profile: str) -> dict:
-    if profile not in PROFILE_METRICS:
-        raise ValueError(f"Unknown profile: {profile}")
-    return PROFILE_METRICS[profile]
+    """
+    Отримати метрики для конкретного профілю
+    
+    Args:
+        profile: Назва профілю ("Whytalik", "Mordan", "Infobase")
+    
+    Returns:
+        dict: Словник метрик згрупованих по категоріях
+    """
+    if profile not in ["Whytalik", "Mordan", "Infobase"]:
+        raise ValueError(f"Unknown profile: {profile}. Available profiles: Whytalik, Mordan, Infobase")
+    
+    result = {}
+    
+    # Проходимо по всіх метриках і збираємо ті, що доступні для профілю
+    for metric_name, config in METRICS_CONFIG.items():
+        if profile in config["profiles"]:
+            category = config["category"]
+            if category not in result:
+                result[category] = []
+            result[category].append(metric_name)
+    
+    return result
+
+
+def get_all_categories() -> list:
+    """
+    Отримати список всіх категорій метрик
+    
+    Returns:
+        list: Список унікальних категорій
+    """
+    categories = set()
+    for config in METRICS_CONFIG.values():
+        categories.add(config["category"])
+    return sorted(list(categories))
+
+
+def get_profiles_for_metric(metric_name: str) -> list:
+    """
+    Отримати список профілів, для яких доступна метрика
+    
+    Args:
+        metric_name: Назва метрики
+    
+    Returns:
+        list: Список профілів
+    """
+    if metric_name not in METRICS_CONFIG:
+        return []
+    return METRICS_CONFIG[metric_name]["profiles"]
+
+
+def is_metric_available_for_profile(metric_name: str, profile: str) -> bool:
+    """
+    Перевірити, чи доступна метрика для профілю
+    
+    Args:
+        metric_name: Назва метрики
+        profile: Назва профілю
+    
+    Returns:
+        bool: True якщо метрика доступна для профілю
+    """
+    if metric_name not in METRICS_CONFIG:
+        return False
+    return profile in METRICS_CONFIG[metric_name]["profiles"]

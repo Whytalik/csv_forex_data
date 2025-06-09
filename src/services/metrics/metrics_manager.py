@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import Dict, Any
-from config.metrics import BASE_METRICS
 from .calculators.volatility_metrics import VolatilityMetrics
 from .calculators.session_distribution_metrics import SessionDistributionMetrics
 from .calculators.intraday_metrics import IntradayMetrics
