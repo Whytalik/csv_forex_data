@@ -137,38 +137,29 @@ class NotionClient:
 
             for metric_name, value in metrics_dict.items():
                 try:
-                    if metric_name == "Date Range":
-                        properties[metric_name] = {
-                            "rich_text": [
-                                {
-                                    "text": {"content": str(value)},
-                                    "annotations": {"bold": True, "color": "pink"},
-                                }
-                            ]
-                        }
-                    else:
-                        # Validate numeric value
-                        if value is None or (
-                            isinstance(value, str) and value.strip() == ""
-                        ):
-                            print(f"⚠️ Skipping empty metric {metric_name} for {symbol}")
-                            continue
+                    # Validate numeric value
+                    if value is None or (
+                        isinstance(value, str) and value.strip() == ""
+                    ):
+                        print(f"⚠️ Skipping empty metric {metric_name} for {symbol}")
+                        continue
 
-                        # Check for inf or nan values
-                        float_value = float(value)
-                        if (
-                            not isinstance(float_value, (int, float))
-                            or float_value != float_value
-                            or float_value == float("inf")
-                            or float_value == float("-inf")
-                        ):
-                            print(
-                                f"⚠️ Skipping invalid metric {metric_name}={value} for {symbol}"
-                            )
-                            invalid_metrics.append(f"{metric_name}={value}")
-                            continue
+                    # Check for inf or nan values
+                    float_value = float(value)
+                    if (
+                        not isinstance(float_value, (int, float))
+                        or float_value != float_value
+                        or float_value == float("inf")
+                        or float_value == float("-inf")
+                    ):
+                        print(
+                            f"⚠️ Skipping invalid metric {metric_name}={value} for {symbol}"
+                        )
+                        invalid_metrics.append(f"{metric_name}={value}")
+                        continue
 
-                        properties[metric_name] = {"number": float_value}
+                    rounded_value = round(float_value, 2)
+                    properties[metric_name] = {"number": rounded_value}
 
                 except (ValueError, TypeError) as ve:
                     print(
@@ -188,13 +179,12 @@ class NotionClient:
 
             data = {"properties": properties}
 
-            # Debug logging
-            print(f"🔍 Uploading {len(properties)} metrics for {symbol}")
+            async with self._semaphore:
+                response = await self.client.patch(
+                    f"{self.endpoint}/pages/{page_id}", headers=self.headers, json=data
+                )
+                response.raise_for_status()
 
-            response = await self.client.patch(
-                f"{self.endpoint}/pages/{page_id}", headers=self.headers, json=data
-            )
-            response.raise_for_status()
             print(f"✅ Updated {len(properties)} metrics for {symbol}")
             return True
 

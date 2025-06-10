@@ -1,11 +1,12 @@
 import sys
 from pathlib import Path
+import asyncio
+import time
 
 src_path = Path(__file__).parent.parent
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-import asyncio
 from services.csv_service import (
     collect_csv_files,
     merge_csv_files,
@@ -25,7 +26,47 @@ from config.notion_settings import (
 from services.metrics_service import MetricsService
 
 
+async def process_single_symbol(
+    symbol_dir: Path,
+    processed_data_root: Path,
+    formatted_data_root: Path,
+    timeframes_data_root: Path,
+) -> tuple[str, dict] | None:
+    """Process a single symbol and return its metrics"""
+    try:
+        symbol = symbol_dir.name
+        start_time = time.time()
+        print(f"🔄 Processing {symbol}...")
+
+        collected_files = collect_csv_files(symbol_dir)
+        merged_file = merge_csv_files(collected_files, processed_data_root, symbol)
+
+        if merged_file is not None:
+            year = merged_file.stem.split("_")[-1]
+            formatted_file = formatted_data_root / f"{symbol}_formatted_{year}.csv"
+            formatted_path = reformat_data(merged_file, formatted_file)
+
+            if formatted_path:
+                print(f"✅ Successfully processed {symbol} data")
+
+                create_timeframes_csv(formatted_path, timeframes_data_root, symbol)
+
+                metrics_service = MetricsService(timeframes_data_root)
+                flat_metrics = metrics_service.calculate_all_metrics(symbol)
+
+                grouped_metrics = group_metrics_by_category(flat_metrics)
+                print(f"✅ Calculated metrics for {symbol}")
+                return symbol, grouped_metrics
+        return None
+    except Exception as e:
+        print(f"❌ Error processing {symbol}: {e}")
+        return None
+
+
 async def process_data_and_calculate_metrics():
+    """Process all symbols in parallel with limited concurrency"""
+    start_time = time.time()
+
     src_path = Path(__file__).parent.parent
 
     raw_data_root = src_path / DATA_PATH["raw_data_path"]
@@ -33,34 +74,92 @@ async def process_data_and_calculate_metrics():
     formatted_data_root = src_path / DATA_PATH["formated_data_path"]
     timeframes_data_root = src_path / DATA_PATH["timeframes_data_path"]
 
-    formatted_data_root.mkdir(parents=True, exist_ok=True)
-    processed_data_root.mkdir(parents=True, exist_ok=True)
-    timeframes_data_root.mkdir(parents=True, exist_ok=True)
+    # Create directories
+    for directory in [formatted_data_root, processed_data_root, timeframes_data_root]:
+        directory.mkdir(parents=True, exist_ok=True)
 
+    # Get all symbol directories
+    symbol_dirs = [subdir for subdir in raw_data_root.iterdir() if subdir.is_dir()]
+
+    if not symbol_dirs:
+        print("⚠️ No symbol directories found")
+        return {}
+
+    print(f"🚀 Starting parallel processing of {len(symbol_dirs)} symbols...")
+
+    # Create semaphore to limit concurrent processing (avoid overwhelming system)
+    semaphore = asyncio.Semaphore(5)  # Increased from 3 to 5 for better performance
+
+    async def process_with_semaphore(symbol_dir):
+        async with semaphore:
+            return await process_single_symbol(
+                symbol_dir,
+                processed_data_root,
+                formatted_data_root,
+                timeframes_data_root,
+            )
+
+    # Process all symbols in parallel with progress tracking
+    tasks = [process_with_semaphore(symbol_dir) for symbol_dir in symbol_dirs]
+
+    # Use asyncio.gather with return_exceptions to handle errors gracefully
+    print(f"📊 Processing {len(tasks)} symbols in parallel (max 5 concurrent)...")
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Collect successful results
     metrics_by_symbol = {}
+    successful = 0
+    failed = 0
 
-    for subdir in raw_data_root.iterdir():
-        if subdir.is_dir():
-            symbol = subdir.name
-            print(f"Processing {symbol}...")
-            collected_files = collect_csv_files(subdir)
-            merged_file = merge_csv_files(collected_files, processed_data_root, symbol)
-            if merged_file is not None:
-                year = merged_file.stem.split("_")[-1]
-                formatted_file = formatted_data_root / f"{symbol}_formatted_{year}.csv"
-                formatted_path = reformat_data(merged_file, formatted_file)
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            failed += 1
+            symbol_name = symbol_dirs[i].name if i < len(symbol_dirs) else "unknown"
+            print(f"❌ Processing failed for {symbol_name}: {result}")
+        elif result is not None:
+            symbol, metrics = result
+            metrics_by_symbol[symbol] = metrics
+            successful += 1
+        else:
+            failed += 1
 
-                if formatted_path:
-                    print(f"Successfully processed {symbol} data")
-                    create_timeframes_csv(formatted_path, timeframes_data_root, symbol)
-                    metrics_service = MetricsService(timeframes_data_root)
-                    flat_metrics = metrics_service.calculate_all_metrics(symbol)
-
-                    grouped_metrics = group_metrics_by_category(flat_metrics)
-                    metrics_by_symbol[symbol] = grouped_metrics
-                    print(f"✅ Calculated metrics for {symbol}")
+    elapsed_time = time.time() - start_time
+    print(
+        f"✅ Completed processing in {elapsed_time:.2f}s: {successful} successful, {failed} failed"
+    )
 
     return metrics_by_symbol
+
+
+async def process_csv_operations_parallel(
+    symbol_dir: Path,
+    processed_data_root: Path,
+    formatted_data_root: Path,
+    timeframes_data_root: Path,
+) -> tuple[str, bool]:
+    """Process CSV operations for a single symbol in parallel"""
+    symbol = symbol_dir.name
+    try:
+        collected_files = collect_csv_files(symbol_dir)
+        merged_file = merge_csv_files(collected_files, processed_data_root, symbol)
+
+        if merged_file is None:
+            return symbol, False
+
+        year = merged_file.stem.split("_")[-1]
+        formatted_file = formatted_data_root / f"{symbol}_formatted_{year}.csv"
+        formatted_path = reformat_data(merged_file, formatted_file)
+
+        if formatted_path is None:
+            return symbol, False
+
+        create_timeframes_csv(formatted_path, timeframes_data_root, symbol)
+
+        return symbol, True
+
+    except Exception as e:
+        print(f"❌ Error in CSV processing for {symbol}: {e}")
+        return symbol, False
 
 
 async def upload_metrics_to_notion(metrics: dict):
@@ -69,13 +168,14 @@ async def upload_metrics_to_notion(metrics: dict):
     async def process_profile(profile: str):
         """Process metrics for a single profile"""
         try:
-            print(f"\nProcessing metrics for {profile}'s database...")
+            print(f"\n📤 Processing metrics for {profile}'s database...")
             headers = get_headers(profile)
             database_id = get_database_id(profile)
-            notion_client = NotionClient(NOTION_ENDPOINT, headers, database_id)
+            notion_client = NotionClient(
+                NOTION_ENDPOINT, headers, database_id, max_concurrent_requests=15
+            )
 
-            # Batch ensure all properties exist
-            print("Ensuring all properties exist...")
+            print("🔧 Ensuring all properties exist...")
             profile_metrics = get_metrics_for_profile(profile)
             property_tasks = []
             for category, metrics_list in profile_metrics.items():
@@ -86,7 +186,7 @@ async def upload_metrics_to_notion(metrics: dict):
 
             await asyncio.gather(*property_tasks, return_exceptions=True)
 
-            print("Preparing metrics for batch upload...")
+            print("📊 Preparing metrics for batch upload...")
             upload_tasks = []
 
             for symbol, symbol_metrics in metrics.items():
@@ -101,7 +201,12 @@ async def upload_metrics_to_notion(metrics: dict):
                     ):
                         for metric_name, value in symbol_metrics[category].items():
                             if metric_name in metrics_list:
-                                symbol_metrics_to_upload[metric_name] = value
+                                if isinstance(value, (int, float)):
+                                    symbol_metrics_to_upload[metric_name] = round(
+                                        value, 2
+                                    )
+                                else:
+                                    symbol_metrics_to_upload[metric_name] = value
 
                 if symbol_metrics_to_upload:
                     upload_tasks.append(
@@ -112,14 +217,17 @@ async def upload_metrics_to_notion(metrics: dict):
 
             if upload_tasks:
                 print(
-                    f"📊 Uploading metrics for {len(upload_tasks)} symbols in parallel..."
+                    f"🚀 Uploading metrics for {len(upload_tasks)} symbols in parallel..."
                 )
                 results = await asyncio.gather(*upload_tasks, return_exceptions=True)
 
                 successful = sum(1 for result in results if result is True)
+                failed = len(results) - successful
                 print(
                     f"✅ Successfully uploaded metrics for {successful}/{len(upload_tasks)} symbols"
                 )
+                if failed > 0:
+                    print(f"❌ Failed to upload metrics for {failed} symbols")
 
             await notion_client.close()
             print(f"✅ Successfully processed metrics for {profile}")
@@ -129,21 +237,67 @@ async def upload_metrics_to_notion(metrics: dict):
             print(f"❌ Error processing profile {profile}: {e}")
             return False
 
-    print("Starting parallel processing of all profiles...")
+    print("🚀 Starting parallel processing of all profiles...")
     profile_tasks = [process_profile(profile) for profile in PROFILES]
     results = await asyncio.gather(*profile_tasks, return_exceptions=True)
 
     # Summary
     successful_profiles = sum(1 for result in results if result is True)
+    failed_profiles = len(PROFILES) - successful_profiles
     print(
         f"\n🎉 Processing complete! {successful_profiles}/{len(PROFILES)} profiles processed successfully"
     )
+    if failed_profiles > 0:
+        print(f"❌ {failed_profiles} profiles failed")
+
+    return successful_profiles == len(PROFILES)
 
 
 async def main():
-    """Main execution function"""
-    metrics = await process_data_and_calculate_metrics()
-    await upload_metrics_to_notion(metrics)
+    """Main function with optimized error handling and performance monitoring"""
+    try:
+        print("🚀 Starting Forex Data Processing Pipeline...")
+        start_time = time.time()
+
+        # Step 1: Process data and calculate metrics
+        print("\n📊 Step 1: Processing data and calculating metrics...")
+        metrics = await process_data_and_calculate_metrics()
+
+        if not metrics:
+            print("❌ No metrics calculated. Exiting.")
+            return
+
+        step1_time = time.time() - start_time
+        print(f"✅ Step 1 completed in {step1_time:.2f}s")
+
+        # Step 2: Upload metrics to Notion
+        print("\n📤 Step 2: Uploading metrics to Notion...")
+        upload_start = time.time()
+
+        upload_success = await upload_metrics_to_notion(metrics)
+
+        upload_time = time.time() - upload_start
+        total_time = time.time() - start_time
+
+        print(f"\n🎯 Performance Summary:")
+        print(f"   • Data processing: {step1_time:.2f}s")
+        print(f"   • Notion upload: {upload_time:.2f}s")
+        print(f"   • Total time: {total_time:.2f}s")
+        print(f"   • Symbols processed: {len(metrics)}")
+        print(f"   • Upload success: {'✅' if upload_success else '❌'}")
+
+        if upload_success:
+            print("\n🎉 All processing completed successfully!")
+        else:
+            print("\n⚠️ Processing completed with some upload failures")
+
+    except KeyboardInterrupt:
+        print("\n⚠️ Process interrupted by user")
+    except Exception as e:
+        print(f"\n❌ Fatal error in main process: {e}")
+        import traceback
+
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

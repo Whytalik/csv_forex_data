@@ -119,46 +119,47 @@ def create_timeframes_csv(
     except (ValueError, IndexError):
         print(f"❌ Could not extract year from input file name: {input_path}")
         return []
-    
+
     try:
         timeframes_dir.mkdir(parents=True, exist_ok=True)
         created_files = []
-        df = None  # Initialize df variable
 
+        # Create symbol directory once
+        symbol_dir = timeframes_dir / symbol.lower()
+        symbol_dir.mkdir(parents=True, exist_ok=True)
+
+        # Check which files need to be created
+        files_to_create = []
         for tf in TIMEFRAMES:
-            # Create symbol directory if it doesn't exist
-            symbol_dir = timeframes_dir / symbol.lower()
-            symbol_dir.mkdir(parents=True, exist_ok=True)
-
-            # Check if file already exists
             output_file = symbol_dir / f"{symbol}_{tf}_{year}.csv"
             if output_file.exists():
                 print(f"ℹ️ Timeframe file already exists: {output_file}")
                 created_files.append(output_file)
-                continue
+            else:
+                files_to_create.append((tf, output_file))
 
+        # If no files need to be created, return early
+        if not files_to_create:
+            return created_files
+
+        # Load the input CSV file only once for all timeframes
+        print(f"📊 Loading data for {symbol} timeframe processing...")
+        df = pd.read_csv(input_path, sep=",", parse_dates=["Date Time"])
+        df = df.rename(
+            columns={
+                "Date Time": "Date Time",
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+            }
+        )
+        df.set_index("Date Time", inplace=True)
+
+        for tf, output_file in files_to_create:
             if tf not in TIMEFRAME_MAP:
                 print(f"Unsupported timeframe: {tf}")
                 continue
-
-            # Read the input CSV file only once
-            if df is None:
-                df = pd.read_csv(
-                    input_path,
-                    sep=",",
-                    parse_dates=["Date Time"],
-                )
-                # Rename columns to lowercase for consistency
-                df = df.rename(
-                    columns={
-                        "Date Time": "Date Time",
-                        "Open": "open",
-                        "High": "high",
-                        "Low": "low",
-                        "Close": "close",
-                    }
-                )
-                df.set_index("Date Time", inplace=True)
 
             # Create resampled data based on timeframe
             if tf == "1w":
@@ -171,7 +172,7 @@ def create_timeframes_csv(
                     df_filtered = df_sorted[df_sorted.index >= start_date]
                 else:
                     df_filtered = df_sorted
-                
+
                 df_adjusted = df_filtered.copy()
                 df_adjusted.index = df_adjusted.index - pd.Timedelta(hours=21)
                 resampled = (
@@ -191,22 +192,28 @@ def create_timeframes_csv(
                     )
                     .dropna()
                 )
-                
+
                 # Filter weeks with at least 5 days of data
                 resampled = resampled[
                     resampled.index.map(
                         lambda x: len(
-                            df_filtered[(df_filtered.index >= x + pd.Timedelta(hours=21)) & 
-                                      (df_filtered.index < x + pd.Timedelta(days=7, hours=21))]
-                        ) >= 5
+                            df_filtered[
+                                (df_filtered.index >= x + pd.Timedelta(hours=21))
+                                & (
+                                    df_filtered.index
+                                    < x + pd.Timedelta(days=7, hours=21)
+                                )
+                            ]
+                        )
+                        >= 5
                     )
                 ]
-                
+
                 # Format weekly index
                 resampled.index = resampled.index.map(
                     lambda x: f"{x.strftime('%Y-%m-%d')} to {(x + pd.Timedelta(days=6)).strftime('%Y-%m-%d')}"
                 )
-                
+
             elif tf == "1d":
                 df_adjusted = df.copy()
                 df_adjusted.index = df_adjusted.index - pd.Timedelta(hours=21)
@@ -227,11 +234,9 @@ def create_timeframes_csv(
                     )
                     .dropna()
                 )
-                # Convert index to date only for daily data
                 resampled.index = pd.to_datetime(resampled.index.date)
-                
+
             else:
-                # For intraday timeframes (1m, 5m, 15m, 1h, 4h)
                 resampled = (
                     df.resample(
                         TIMEFRAME_MAP[tf],
@@ -251,7 +256,147 @@ def create_timeframes_csv(
                     .dropna()
                 )
 
-            # Save the resampled data
+            resampled.to_csv(
+                output_file,
+                sep=",",
+                index=True,
+                header=["Open", "High", "Low", "Close"],
+                date_format=(
+                    "%Y-%m-%d"
+                    if tf == "1d"
+                    else ("%Y-%m-%d %H:%M:%S" if tf != "1w" else None)
+                ),
+                float_format="%.5f",
+            )
+
+            print(f"✅ Created {tf} timeframe data for {symbol} ({year})")
+            created_files.append(output_file)
+
+        return created_files
+
+    except Exception as e:
+        files_to_create = []
+        for tf in TIMEFRAMES:
+            output_file = symbol_dir / f"{symbol}_{tf}_{year}.csv"
+            if output_file.exists():
+                print(f"ℹ️ Timeframe file already exists: {output_file}")
+                created_files.append(output_file)
+            else:
+                files_to_create.append((tf, output_file))
+
+        if not files_to_create:
+            return created_files
+
+        print(f"📊 Loading data for {symbol} timeframe processing...")
+        df = pd.read_csv(input_path, sep=",", parse_dates=["Date Time"])
+        df = df.rename(
+            columns={
+                "Date Time": "Date Time",
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+            }
+        )
+        df.set_index("Date Time", inplace=True)
+
+        for tf, output_file in files_to_create:
+            if tf not in TIMEFRAME_MAP:
+                print(f"Unsupported timeframe: {tf}")
+                continue
+
+            if tf == "1w":
+                df_sorted = df.sort_index()
+                start_date = df_sorted.index[0].normalize()
+                if start_date.weekday() != 0:
+                    days_to_next_monday = (7 - start_date.weekday()) % 7
+                    start_date = start_date + pd.Timedelta(days=days_to_next_monday)
+                    start_date = start_date + pd.Timedelta(hours=21)
+                    df_filtered = df_sorted[df_sorted.index >= start_date]
+                else:
+                    df_filtered = df_sorted
+
+                df_adjusted = df_filtered.copy()
+                df_adjusted.index = df_adjusted.index - pd.Timedelta(hours=21)
+                resampled = (
+                    df_adjusted.resample(
+                        TIMEFRAME_MAP[tf],
+                        origin="start",
+                        closed="left",
+                        label="left",
+                    )
+                    .agg(
+                        {
+                            "open": "first",
+                            "high": "max",
+                            "low": "min",
+                            "close": "last",
+                        }
+                    )
+                    .dropna()
+                )
+
+                resampled = resampled[
+                    resampled.index.map(
+                        lambda x: len(
+                            df_filtered[
+                                (df_filtered.index >= x + pd.Timedelta(hours=21))
+                                & (
+                                    df_filtered.index
+                                    < x + pd.Timedelta(days=7, hours=21)
+                                )
+                            ]
+                        )
+                        >= 5
+                    )
+                ]
+
+                resampled.index = resampled.index.map(
+                    lambda x: f"{x.strftime('%Y-%m-%d')} to {(x + pd.Timedelta(days=6)).strftime('%Y-%m-%d')}"
+                )
+
+            elif tf == "1d":
+                df_adjusted = df.copy()
+                df_adjusted.index = df_adjusted.index - pd.Timedelta(hours=21)
+                resampled = (
+                    df_adjusted.resample(
+                        TIMEFRAME_MAP[tf],
+                        origin="start",
+                        closed="left",
+                        label="left",
+                    )
+                    .agg(
+                        {
+                            "open": "first",
+                            "high": "max",
+                            "low": "min",
+                            "close": "last",
+                        }
+                    )
+                    .dropna()
+                )
+                resampled.index = pd.to_datetime(resampled.index.date)
+
+            else:
+                resampled = (
+                    df.resample(
+                        TIMEFRAME_MAP[tf],
+                        origin="start",
+                        offset="1min",
+                        closed="left",
+                        label="left",
+                    )
+                    .agg(
+                        {
+                            "open": "first",
+                            "high": "max",
+                            "low": "min",
+                            "close": "last",
+                        }
+                    )
+                    .dropna()
+                )
+
             resampled.to_csv(
                 output_file,
                 sep=",",

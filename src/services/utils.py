@@ -28,14 +28,12 @@ def get_session_range(session_name: str, data: pd.DataFrame, symbol: str) -> flo
 
     session_data = data[mask]
     if session_data.empty:
-        return 0.0
-
-    # Group by date to get daily session ranges
+        return 0.0  # Group by date to get daily session ranges
     session_data = session_data.groupby(session_data.index.date).agg(
         {"High": "max", "Low": "min"}
     )
 
-    return round(((session_data["High"] - session_data["Low"]) * pip_factor).mean(), 0)
+    return round(((session_data["High"] - session_data["Low"]) * pip_factor).mean(), 2)
 
 
 def is_time_in_session(time_to_check, session_times):

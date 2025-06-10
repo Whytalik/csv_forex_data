@@ -230,34 +230,32 @@ class SessionDistributionMetrics(BaseMetric):
             if daily_high_session in high_counts:
                 high_counts[daily_high_session] += 1
             if daily_low_session in low_counts:
-                low_counts[daily_low_session] += 1
-
-        # Calculate percentages
+                low_counts[daily_low_session] += 1  # Calculate percentages
         metrics = {}
         for session_name in SESSIONS.keys():
             high_percentage = (
-                round((high_counts[session_name] / total_days) * 100, 2)
+                self.round_metric((high_counts[session_name] / total_days) * 100)
                 if total_days > 0
-                else 0
+                else 0.0
             )
             low_percentage = (
-                round((low_counts[session_name] / total_days) * 100, 2)
+                self.round_metric((low_counts[session_name] / total_days) * 100)
                 if total_days > 0
-                else 0
+                else 0.0
             )
 
             metrics[f"Daily High in {session_name} %"] = high_percentage
             metrics[f"Daily Low in {session_name} %"] = low_percentage
 
         metrics["Daily High in Out of Session %"] = (
-            round((high_counts["Out of Session"] / total_days) * 100, 2)
+            self.round_metric((high_counts["Out of Session"] / total_days) * 100)
             if total_days > 0
-            else 0
+            else 0.0
         )
         metrics["Daily Low in Out of Session %"] = (
-            round((low_counts["Out of Session"] / total_days) * 100, 2)
+            self.round_metric((low_counts["Out of Session"] / total_days) * 100)
             if total_days > 0
-            else 0
+            else 0.0
         )
 
         self.logger.info(f"Session distribution calculation completed")
@@ -294,8 +292,7 @@ class SessionDistributionMetrics(BaseMetric):
             if cache_file.exists():
                 cache_file.unlink()
                 self.logger.info(f"Cleared cache for {symbol} {year}")
-        else:
-            # Clear all cache files
+        else:  # Clear all cache files
             for cache_file in self.cache_dir.glob("*.csv"):
                 cache_file.unlink()
             self.logger.info("Cleared all session distribution cache files")
@@ -303,20 +300,23 @@ class SessionDistributionMetrics(BaseMetric):
     def get_session_comparison_metrics(self, daily_session_df: pd.DataFrame) -> dict:
         """
         Calculate comparison metrics between sessions using cached session data.
-        Returns percentages for when one session breaks another session's high/low.
+        Returns percentages for when one session breaks another session's high/low
+        considering chronological order - once a level is broken, subsequent sessions
+        cannot break it again.
         """
         if daily_session_df.empty:
             return {}
 
         metrics = {}
-        session_names = list(SESSIONS.keys())
+        # Define chronological order of sessions throughout the trading day
+        session_order = ["Asia", "Frankfurt", "London", "Lunch", "NY", "Out of Session"]
 
-        for i, session1 in enumerate(session_names):
-            for j, session2 in enumerate(session_names):
-                if i >= j:  # Avoid duplicate comparisons and self-comparison
+        for i, session1 in enumerate(session_order):
+            for j, session2 in enumerate(session_order):
+                if j <= i:  # Only consider sessions that come AFTER session1
                     continue
 
-                # Count when session2 breaks session1's high
+                # Count when session2 breaks session1's high (and it hasn't been broken yet)
                 session1_high_col = f"{session1}_high"
                 session2_high_col = f"{session2}_high"
 
@@ -328,19 +328,52 @@ class SessionDistributionMetrics(BaseMetric):
                         subset=[session1_high_col, session2_high_col]
                     )
                     if not valid_data.empty:
-                        breaks_high = (
-                            valid_data[session2_high_col]
-                            > valid_data[session1_high_col]
-                        ).sum()
+                        # Check if session2 breaks session1's high AND
+                        # no intermediate session has already broken it
+                        breaks_count = 0
+
+                        for _, row in valid_data.iterrows():
+                            session1_high = row[session1_high_col]
+                            session2_high = row[session2_high_col]
+
+                            # Check if session2 breaks session1's high
+                            if session2_high > session1_high:
+                                # Check if any intermediate session already broke it
+                                already_broken = False
+                                for k in range(
+                                    i + 1, j
+                                ):  # Check sessions between session1 and session2
+                                    intermediate_session = session_order[k]
+                                    intermediate_high_col = (
+                                        f"{intermediate_session}_high"
+                                    )
+
+                                    if (
+                                        intermediate_high_col
+                                        in daily_session_df.columns
+                                    ):
+                                        intermediate_high = row.get(
+                                            intermediate_high_col
+                                        )
+                                        if (
+                                            pd.notna(intermediate_high)
+                                            and intermediate_high > session1_high
+                                        ):
+                                            already_broken = True
+                                            break
+
+                                if not already_broken:
+                                    breaks_count += 1
+
                         total_days = len(valid_data)
                         percentage = (
-                            round((breaks_high / total_days) * 100, 2)
+                            self.round_metric((breaks_count / total_days) * 100)
                             if total_days > 0
-                            else 0
+                            else 0.0
                         )
                         metrics[f"{session2}-{session1} High %"] = percentage
 
-                # Count when session2 breaks session1's low
+                # Count when session2 breaks session1's low (and it hasn't been broken yet)
                 session1_low_col = f"{session1}_low"
                 session2_low_col = f"{session2}_low"
 
@@ -352,14 +385,41 @@ class SessionDistributionMetrics(BaseMetric):
                         subset=[session1_low_col, session2_low_col]
                     )
                     if not valid_data.empty:
-                        breaks_low = (
-                            valid_data[session2_low_col] < valid_data[session1_low_col]
-                        ).sum()
+                        # Check if session2 breaks session1's low AND
+                        # no intermediate session has already broken it
+                        breaks_count = 0
+
+                        for _, row in valid_data.iterrows():
+                            session1_low = row[session1_low_col]
+                            session2_low = row[session2_low_col]
+
+                            # Check if session2 breaks session1's low
+                            if session2_low < session1_low:
+                                # Check if any intermediate session already broke it
+                                already_broken = False
+                                for k in range(
+                                    i + 1, j
+                                ):  # Check sessions between session1 and session2
+                                    intermediate_session = session_order[k]
+                                    intermediate_low_col = f"{intermediate_session}_low"
+
+                                    if intermediate_low_col in daily_session_df.columns:
+                                        intermediate_low = row.get(intermediate_low_col)
+                                        if (
+                                            pd.notna(intermediate_low)
+                                            and intermediate_low < session1_low
+                                        ):
+                                            already_broken = True
+                                            break
+
+                                if not already_broken:
+                                    breaks_count += 1
+
                         total_days = len(valid_data)
                         percentage = (
-                            round((breaks_low / total_days) * 100, 2)
+                            self.round_metric((breaks_count / total_days) * 100)
                             if total_days > 0
-                            else 0
+                            else 0.0
                         )
                         metrics[f"{session2}-{session1} Low %"] = percentage
 
@@ -368,16 +428,18 @@ class SessionDistributionMetrics(BaseMetric):
     def get_directional_metrics(self, daily_session_df: pd.DataFrame) -> dict:
         """
         Calculate directional metrics using cached session data.
+        Considers chronological order - levels can only be broken once.
         """
         if daily_session_df.empty:
             return {}
 
         metrics = {}
-        session_names = list(SESSIONS.keys())
+        # Define chronological order of sessions throughout the trading day
+        session_order = ["Asia", "Frankfurt", "London", "Lunch", "NY", "Out of Session"]
 
-        for i, session1 in enumerate(session_names):
-            for j, session2 in enumerate(session_names):
-                if i >= j:  # Avoid duplicate comparisons and self-comparison
+        for i, session1 in enumerate(session_order):
+            for j, session2 in enumerate(session_order):
+                if j <= i:  # Only consider sessions that come AFTER session1
                     continue
 
                 session1_high_col = f"{session1}_high"
@@ -385,7 +447,7 @@ class SessionDistributionMetrics(BaseMetric):
                 session2_low_col = f"{session2}_low"
                 session2_high_col = f"{session2}_high"
 
-                # Bullish: session2 breaks session1's low (takes liquidity below and moves up)
+                # Bullish: session2 breaks session1's low (and it hasn't been broken yet)
                 if all(
                     col in daily_session_df.columns
                     for col in [session1_low_col, session2_low_col]
@@ -394,18 +456,45 @@ class SessionDistributionMetrics(BaseMetric):
                         subset=[session1_low_col, session2_low_col]
                     )
                     if not valid_data.empty:
-                        bullish_breaks = (
-                            valid_data[session2_low_col] < valid_data[session1_low_col]
-                        ).sum()
+                        # Check if session2 breaks session1's low AND
+                        # no intermediate session has already broken it
+                        breaks_count = 0
+
+                        for _, row in valid_data.iterrows():
+                            session1_low = row[session1_low_col]
+                            session2_low = row[session2_low_col]
+
+                            # Check if session2 breaks session1's low
+                            if session2_low < session1_low:
+                                # Check if any intermediate session already broke it
+                                already_broken = False
+                                for k in range(
+                                    i + 1, j
+                                ):  # Check sessions between session1 and session2
+                                    intermediate_session = session_order[k]
+                                    intermediate_low_col = f"{intermediate_session}_low"
+
+                                    if intermediate_low_col in daily_session_df.columns:
+                                        intermediate_low = row.get(intermediate_low_col)
+                                        if (
+                                            pd.notna(intermediate_low)
+                                            and intermediate_low < session1_low
+                                        ):
+                                            already_broken = True
+                                            break
+
+                                if not already_broken:
+                                    breaks_count += 1
+
                         total_days = len(valid_data)
                         percentage = (
-                            round((bullish_breaks / total_days) * 100, 2)
+                            self.round_metric((breaks_count / total_days) * 100)
                             if total_days > 0
-                            else 0
+                            else 0.0
                         )
                         metrics[f"Bullish {session2}-{session1} Low %"] = percentage
 
-                # Bearish: session2 breaks session1's high (takes liquidity above and moves down)
+                # Bearish: session2 breaks session1's high (and it hasn't been broken yet)
                 if all(
                     col in daily_session_df.columns
                     for col in [session1_high_col, session2_high_col]
@@ -414,15 +503,48 @@ class SessionDistributionMetrics(BaseMetric):
                         subset=[session1_high_col, session2_high_col]
                     )
                     if not valid_data.empty:
-                        bearish_breaks = (
-                            valid_data[session2_high_col]
-                            > valid_data[session1_high_col]
-                        ).sum()
+                        # Check if session2 breaks session1's high AND
+                        # no intermediate session has already broken it
+                        breaks_count = 0
+
+                        for _, row in valid_data.iterrows():
+                            session1_high = row[session1_high_col]
+                            session2_high = row[session2_high_col]
+
+                            # Check if session2 breaks session1's high
+                            if session2_high > session1_high:
+                                # Check if any intermediate session already broke it
+                                already_broken = False
+                                for k in range(
+                                    i + 1, j
+                                ):  # Check sessions between session1 and session2
+                                    intermediate_session = session_order[k]
+                                    intermediate_high_col = (
+                                        f"{intermediate_session}_high"
+                                    )
+
+                                    if (
+                                        intermediate_high_col
+                                        in daily_session_df.columns
+                                    ):
+                                        intermediate_high = row.get(
+                                            intermediate_high_col
+                                        )
+                                        if (
+                                            pd.notna(intermediate_high)
+                                            and intermediate_high > session1_high
+                                        ):
+                                            already_broken = True
+                                            break
+
+                                if not already_broken:
+                                    breaks_count += 1
+
                         total_days = len(valid_data)
                         percentage = (
-                            round((bearish_breaks / total_days) * 100, 2)
+                            self.round_metric((breaks_count / total_days) * 100)
                             if total_days > 0
-                            else 0
+                            else 0.0
                         )
                         metrics[f"Bearish {session2}-{session1} High %"] = percentage
 

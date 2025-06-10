@@ -18,12 +18,10 @@ class IntradayMetrics(BaseMetric):
                 daily_session_df = pd.read_csv(
                     intermediate_cache_file, parse_dates=["trading_date"]
                 )
-                # Use the new method to calculate session comparison metrics
                 return session_dist.get_session_comparison_metrics(daily_session_df)
             except Exception as e:
                 print(f"Error loading cached data: {e}")
 
-        # Fallback to empty metrics if no cached data
         metrics = {
             "Frankfurt-Asia High %": 0,
             "Frankfurt-Asia Low %": 0,
