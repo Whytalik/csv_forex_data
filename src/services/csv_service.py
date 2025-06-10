@@ -119,9 +119,11 @@ def create_timeframes_csv(
     except (ValueError, IndexError):
         print(f"❌ Could not extract year from input file name: {input_path}")
         return []
+    
     try:
         timeframes_dir.mkdir(parents=True, exist_ok=True)
         created_files = []
+        df = None  # Initialize df variable
 
         for tf in TIMEFRAMES:
             # Create symbol directory if it doesn't exist
@@ -139,8 +141,8 @@ def create_timeframes_csv(
                 print(f"Unsupported timeframe: {tf}")
                 continue
 
-            # Read the input CSV file only if we need to create at least one new file
-            if not "df" in locals():
+            # Read the input CSV file only once
+            if df is None:
                 df = pd.read_csv(
                     input_path,
                     sep=",",
@@ -158,37 +160,78 @@ def create_timeframes_csv(
                 )
                 df.set_index("Date Time", inplace=True)
 
-                if tf == "1w":
-                    df = df.sort_index()
-                    start_date = df.index[0].normalize()
-                    if start_date.weekday() != 0:
-                        days_to_next_monday = (7 - start_date.weekday()) % 7
-                        start_date = start_date + pd.Timedelta(days=days_to_next_monday)
-                        start_date = start_date + pd.Timedelta(hours=21)
-                        df = df[df.index >= start_date]
-                        if tf in ["1d", "1w"]:
-                            df_adjusted = df.copy()
-                            df_adjusted.index = df_adjusted.index - pd.Timedelta(
-                                hours=21
-                            )
-                            resampled = (
-                                df_adjusted.resample(
-                                    TIMEFRAME_MAP[tf],
-                                    origin="start",
-                                    closed="left",
-                                    label="left",
-                                )
-                                .agg(
-                                    {
-                                        "open": "first",
-                                        "high": "max",
-                                        "low": "min",
-                                        "close": "last",
-                                    }
-                                )
-                                .dropna()
-                            )
+            # Create resampled data based on timeframe
+            if tf == "1w":
+                df_sorted = df.sort_index()
+                start_date = df_sorted.index[0].normalize()
+                if start_date.weekday() != 0:
+                    days_to_next_monday = (7 - start_date.weekday()) % 7
+                    start_date = start_date + pd.Timedelta(days=days_to_next_monday)
+                    start_date = start_date + pd.Timedelta(hours=21)
+                    df_filtered = df_sorted[df_sorted.index >= start_date]
+                else:
+                    df_filtered = df_sorted
+                
+                df_adjusted = df_filtered.copy()
+                df_adjusted.index = df_adjusted.index - pd.Timedelta(hours=21)
+                resampled = (
+                    df_adjusted.resample(
+                        TIMEFRAME_MAP[tf],
+                        origin="start",
+                        closed="left",
+                        label="left",
+                    )
+                    .agg(
+                        {
+                            "open": "first",
+                            "high": "max",
+                            "low": "min",
+                            "close": "last",
+                        }
+                    )
+                    .dropna()
+                )
+                
+                # Filter weeks with at least 5 days of data
+                resampled = resampled[
+                    resampled.index.map(
+                        lambda x: len(
+                            df_filtered[(df_filtered.index >= x + pd.Timedelta(hours=21)) & 
+                                      (df_filtered.index < x + pd.Timedelta(days=7, hours=21))]
+                        ) >= 5
+                    )
+                ]
+                
+                # Format weekly index
+                resampled.index = resampled.index.map(
+                    lambda x: f"{x.strftime('%Y-%m-%d')} to {(x + pd.Timedelta(days=6)).strftime('%Y-%m-%d')}"
+                )
+                
+            elif tf == "1d":
+                df_adjusted = df.copy()
+                df_adjusted.index = df_adjusted.index - pd.Timedelta(hours=21)
+                resampled = (
+                    df_adjusted.resample(
+                        TIMEFRAME_MAP[tf],
+                        origin="start",
+                        closed="left",
+                        label="left",
+                    )
+                    .agg(
+                        {
+                            "open": "first",
+                            "high": "max",
+                            "low": "min",
+                            "close": "last",
+                        }
+                    )
+                    .dropna()
+                )
+                # Convert index to date only for daily data
+                resampled.index = pd.to_datetime(resampled.index.date)
+                
             else:
+                # For intraday timeframes (1m, 5m, 15m, 1h, 4h)
                 resampled = (
                     df.resample(
                         TIMEFRAME_MAP[tf],
@@ -208,22 +251,7 @@ def create_timeframes_csv(
                     .dropna()
                 )
 
-            if tf == "1w":
-                resampled = resampled[
-                    resampled.index.map(
-                        lambda x: len(
-                            df[(df.index >= x) & (df.index < x + pd.Timedelta(days=7))]
-                        )
-                        >= 5
-                    )
-                ]
-                if tf == "1w":
-                    resampled.index = resampled.index.map(
-                        lambda x: f"{x.strftime('%Y-%m-%d')} to {(x + pd.Timedelta(days=6)).strftime('%Y-%m-%d')}"
-                    )
-                elif tf == "1d":
-                    resampled.index = pd.to_datetime(resampled.index.date)
-
+            # Save the resampled data
             resampled.to_csv(
                 output_file,
                 sep=",",

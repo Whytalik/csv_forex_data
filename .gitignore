@@ -49,6 +49,9 @@ nosetests.xml
 .pytype/
 .pylint.d/
 
+# CSV files
+*.csv
+
 # Build artifacts
 build/
 dist/

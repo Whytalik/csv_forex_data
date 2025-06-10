@@ -39,16 +39,13 @@ class BaseMetric(ABC):
             raise FileNotFoundError(
                 f"No data file found for {symbol} {timeframe} {year}"
             )
-
+        
         df = pd.read_csv(
-            file_path, parse_dates=["Date Time"] if timeframe != "1w" else None
+            file_path, index_col=0, parse_dates=True if timeframe != "1w" else False
         )
 
         std_threshold = 5 if timeframe == "1w" else 3
         df = self.filter_anomalies(df, ["Open", "High", "Low", "Close"], std_threshold)
-        
-        if timeframe != "1w":
-            df.set_index("Date Time", inplace=True)
 
         return df
 
