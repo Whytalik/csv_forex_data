@@ -1,7 +1,7 @@
 API_SETTINGS = {
     "Whytalik": {
         "API_KEY": "secret_sl5BQuN2XSLk2uVZXj0JN3kF8jp5kgbLWFpRGXNmpSb",
-        "DATABASE_ID": "18a2e1b676d481a49ab9fa89f8dbbfa2",
+        "DATABASE_ID": "20c2e1b676d4810684a2cd74e78d4770",
     },
     "Mordan": {
         "API_KEY": "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",

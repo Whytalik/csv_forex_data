@@ -28,8 +28,6 @@ class MetricsManager:
             metrics = calculator.calculate(symbol, year)
             all_metrics.update(metrics)
 
-        all_metrics["Date Range"] = f"{year}-01-01 to {year}-12-31"
-
         return all_metrics
 
     def calculate_specific_metrics(

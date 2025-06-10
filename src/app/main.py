@@ -13,7 +13,7 @@ from services.csv_service import (
     create_timeframes_csv,
 )
 from config.settings import DATA_PATH
-from config.metrics import get_metrics_for_profile
+from config.metrics import get_metrics_for_profile, group_metrics_by_category
 from config.timeframes_config import TIMEFRAMES
 from services.notion_client import NotionClient
 from config.notion_settings import (
@@ -52,52 +52,92 @@ async def process_data_and_calculate_metrics():
 
                 if formatted_path:
                     print(f"Successfully processed {symbol} data")
-                    create_timeframes_csv(formatted_path, timeframes_data_root, symbol)                    
+                    create_timeframes_csv(formatted_path, timeframes_data_root, symbol)
                     metrics_service = MetricsService(timeframes_data_root)
-                    metrics = metrics_service.calculate_all_metrics(symbol)
+                    flat_metrics = metrics_service.calculate_all_metrics(symbol)
 
-                    metrics_by_symbol[symbol] = metrics
+                    grouped_metrics = group_metrics_by_category(flat_metrics)
+                    metrics_by_symbol[symbol] = grouped_metrics
                     print(f"✅ Calculated metrics for {symbol}")
 
     return metrics_by_symbol
 
 
 async def upload_metrics_to_notion(metrics: dict):
-    """Upload calculated metrics to Notion for each profile"""
-    for profile in PROFILES:
+    """Upload calculated metrics to Notion for each profile with parallel processing"""
+
+    async def process_profile(profile: str):
+        """Process metrics for a single profile"""
         try:
             print(f"\nProcessing metrics for {profile}'s database...")
             headers = get_headers(profile)
             database_id = get_database_id(profile)
             notion_client = NotionClient(NOTION_ENDPOINT, headers, database_id)
+
+            # Batch ensure all properties exist
             print("Ensuring all properties exist...")
             profile_metrics = get_metrics_for_profile(profile)
+            property_tasks = []
             for category, metrics_list in profile_metrics.items():
                 for metric in metrics_list:
-                    metric_type = "rich_text" if metric == "Date Range" else "number"
-                    await notion_client.ensure_property_exists(metric, metric_type)
+                    property_tasks.append(
+                        notion_client.ensure_property_exists(metric, "number")
+                    )
 
-            print("Checking existing symbols in database...")
+            await asyncio.gather(*property_tasks, return_exceptions=True)
+
+            print("Preparing metrics for batch upload...")
+            upload_tasks = []
+
             for symbol, symbol_metrics in metrics.items():
                 if not await notion_client.is_symbol_exists(symbol.upper()):
                     print(f"⚠️ Skipping {symbol} - not found in {profile}'s database")
-                    continue                
-                print(f"\nUploading metrics for {symbol}...")
-                profile_metrics_config = get_metrics_for_profile(profile)
-                for category, metrics_list in profile_metrics_config.items():
-                    if category in symbol_metrics and isinstance(symbol_metrics[category], dict):
+                    continue
+
+                symbol_metrics_to_upload = {}
+                for category, metrics_list in profile_metrics.items():
+                    if category in symbol_metrics and isinstance(
+                        symbol_metrics[category], dict
+                    ):
                         for metric_name, value in symbol_metrics[category].items():
                             if metric_name in metrics_list:
-                                await notion_client.upload_metric(
-                                    symbol, metric_name, value
-                                )
+                                symbol_metrics_to_upload[metric_name] = value
+
+                if symbol_metrics_to_upload:
+                    upload_tasks.append(
+                        notion_client.upload_metrics_batch(
+                            symbol, symbol_metrics_to_upload
+                        )
+                    )
+
+            if upload_tasks:
+                print(
+                    f"📊 Uploading metrics for {len(upload_tasks)} symbols in parallel..."
+                )
+                results = await asyncio.gather(*upload_tasks, return_exceptions=True)
+
+                successful = sum(1 for result in results if result is True)
+                print(
+                    f"✅ Successfully uploaded metrics for {successful}/{len(upload_tasks)} symbols"
+                )
 
             await notion_client.close()
             print(f"✅ Successfully processed metrics for {profile}")
+            return True
 
         except Exception as e:
             print(f"❌ Error processing profile {profile}: {e}")
-            continue
+            return False
+
+    print("Starting parallel processing of all profiles...")
+    profile_tasks = [process_profile(profile) for profile in PROFILES]
+    results = await asyncio.gather(*profile_tasks, return_exceptions=True)
+
+    # Summary
+    successful_profiles = sum(1 for result in results if result is True)
+    print(
+        f"\n🎉 Processing complete! {successful_profiles}/{len(PROFILES)} profiles processed successfully"
+    )
 
 
 async def main():
