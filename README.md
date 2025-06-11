@@ -50,7 +50,6 @@ src/
 | 💷 GBP/USD | British Pound vs US Dollar |
 | 💴 USD/JPY | US Dollar vs Japanese Yen |
 | 🏦 USD/CHF | US Dollar vs Swiss Franc |
-| 🥈 XAG/USD | Silver vs US Dollar |
 
 ## ⏰ Market Sessions (UTC)
 

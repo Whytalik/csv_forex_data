@@ -15,8 +15,4 @@ PAIRS = {
         "name": "USD/CHF",
         "pip_factor": 10000,
     },
-    "XAGUSD": {
-        "name": "XAG/USD",
-        "pip_factor": 10000,
-    },
 }

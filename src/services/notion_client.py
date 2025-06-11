@@ -1,5 +1,7 @@
 import httpx
 import asyncio
+import time
+import random
 
 
 class NotionClient:
@@ -10,6 +12,44 @@ class NotionClient:
         self.client = httpx.AsyncClient(timeout=httpx.Timeout(30.0))
         self._page_cache = {}
         self._semaphore = asyncio.Semaphore(max_concurrent_requests)
+
+    async def _retry_request(self, request_func, max_retries=3, base_delay=1.0):
+        """
+        Retry a request with exponential backoff for handling 503 and other transient errors
+        """
+        for attempt in range(max_retries + 1):
+            try:
+                result = await request_func()
+                return result
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code in [
+                    503,
+                    502,
+                    504,
+                    429,
+                ]:  # Service unavailable, bad gateway, gateway timeout, rate limit
+                    if attempt == max_retries:
+                        raise  # Re-raise on final attempt
+
+                    # Calculate delay with exponential backoff and jitter
+                    delay = base_delay * (2**attempt) + random.uniform(0, 1)
+                    print(
+                        f"⚠️ Notion API error {e.response.status_code}, retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries + 1})"
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    raise  # Re-raise non-retryable errors immediately
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
+                if attempt == max_retries:
+                    raise
+
+                delay = base_delay * (2**attempt) + random.uniform(0, 1)
+                print(
+                    f"⚠️ Connection error, retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries + 1}): {e}"
+                )
+                await asyncio.sleep(delay)
+
+        return None  # Should never reach here
 
     async def close(self):
         await self.client.aclose()
@@ -43,9 +83,8 @@ class NotionClient:
                 print(f"❌ Error fetching page_id for {symbol}: {e}")
                 return None
 
-    async def get_properties(self) -> dict | None:
-        async with self._semaphore:
-            try:
+        async def _make_request():
+            async with self._semaphore:
                 response = await self.client.get(
                     f"{self.endpoint}/databases/{self.database_id}",
                     headers=self.headers,
@@ -53,9 +92,12 @@ class NotionClient:
                 response.raise_for_status()
                 database = response.json()
                 return database.get("properties", {})
-            except httpx.HTTPError as e:
-                print(f"❌ Error fetching properties: {e}")
-                return None
+
+        try:
+            return await self._retry_request(_make_request)
+        except Exception as e:
+            print(f"❌ Error fetching properties after retries: {e}")
+            return None
 
     async def is_property_exists(self, property_name: str) -> bool:
         properties = await self.get_properties()

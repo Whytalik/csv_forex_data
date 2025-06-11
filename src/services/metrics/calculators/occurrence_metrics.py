@@ -106,40 +106,52 @@ class OccurrenceMetrics(BaseMetric):
         }
 
     def _calculate_pdh_probability(self, daily_data: pd.DataFrame) -> float:
-        """Calculate probability that previous day high (PDH) is taken out"""
+        """Calculate probability that ONLY previous day high (PDH) is taken out (not both PDH and PDL)"""
         if len(daily_data) < 2:
             return 0.0
 
-        pdh_taken_count = 0
+        pdh_only_taken_count = 0
         total_days = 0
 
         for i in range(1, len(daily_data)):
             prev_day_high = daily_data.iloc[i - 1]["High"]
+            prev_day_low = daily_data.iloc[i - 1]["Low"]
             current_day_high = daily_data.iloc[i]["High"]
+            current_day_low = daily_data.iloc[i]["Low"]
 
-            if current_day_high > prev_day_high:
-                pdh_taken_count += 1
+            pdh_taken = current_day_high > prev_day_high
+            pdl_taken = current_day_low < prev_day_low
+
+            # Count only if PDH is taken but PDL is NOT taken
+            if pdh_taken and not pdl_taken:
+                pdh_only_taken_count += 1
             total_days += 1
 
-        return (pdh_taken_count / total_days * 100) if total_days > 0 else 0.0
+        return (pdh_only_taken_count / total_days * 100) if total_days > 0 else 0.0
 
     def _calculate_pdl_probability(self, daily_data: pd.DataFrame) -> float:
-        """Calculate probability that previous day low (PDL) is taken out"""
+        """Calculate probability that ONLY previous day low (PDL) is taken out (not both PDH and PDL)"""
         if len(daily_data) < 2:
             return 0.0
 
-        pdl_taken_count = 0
+        pdl_only_taken_count = 0
         total_days = 0
 
         for i in range(1, len(daily_data)):
+            prev_day_high = daily_data.iloc[i - 1]["High"]
             prev_day_low = daily_data.iloc[i - 1]["Low"]
+            current_day_high = daily_data.iloc[i]["High"]
             current_day_low = daily_data.iloc[i]["Low"]
 
-            if current_day_low < prev_day_low:
-                pdl_taken_count += 1
+            pdh_taken = current_day_high > prev_day_high
+            pdl_taken = current_day_low < prev_day_low
+
+            # Count only if PDL is taken but PDH is NOT taken
+            if pdl_taken and not pdh_taken:
+                pdl_only_taken_count += 1
             total_days += 1
 
-        return (pdl_taken_count / total_days * 100) if total_days > 0 else 0.0
+        return (pdl_only_taken_count / total_days * 100) if total_days > 0 else 0.0
 
     def _calculate_pd_levels_probability(self, daily_data: pd.DataFrame) -> float:
         """Calculate probability that BOTH PDH AND PDL are taken out"""
