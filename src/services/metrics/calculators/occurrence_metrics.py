@@ -7,7 +7,6 @@ class OccurrenceMetrics(BaseMetric):
         try:
             daily_data = self.load_timeframe_data(symbol, year, "1d")
             weekly_data = self.load_timeframe_data(symbol, year, "1w")
-
             if daily_data.empty or weekly_data.empty:
                 return self._get_empty_metrics()
 
@@ -15,7 +14,13 @@ class OccurrenceMetrics(BaseMetric):
 
             high_counts = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
             low_counts = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
+
+            # Додаткові лічильники для bullish/bearish тижнів
+            bullish_high_counts = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
+            bearish_high_counts = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
             total_weeks = 0
+            total_bullish_weeks = 0
+            total_bearish_weeks = 0
 
             for week_start, week_data in weekly_data.iterrows():
                 week_high = week_data["High"]
@@ -42,12 +47,27 @@ class OccurrenceMetrics(BaseMetric):
 
                 total_weeks += 1
 
+                week_open = week_data["Open"]
+                week_close = week_data["Close"]
+                is_bullish_week = week_close > week_open
+                is_bearish_week = week_close < week_open
+
+                if is_bullish_week:
+                    total_bullish_weeks += 1
+                elif is_bearish_week:
+                    total_bearish_weeks += 1
+
                 high_days = week_daily_data[week_daily_data["High"] == week_high]
                 if not high_days.empty:
                     first_high_day = high_days.iloc[0]
                     high_weekday = first_high_day["weekday"]
                     if high_weekday in high_counts:
                         high_counts[high_weekday] += 1
+
+                        if is_bullish_week:
+                            bullish_high_counts[high_weekday] += 1
+                        elif is_bearish_week:
+                            bearish_high_counts[high_weekday] += 1
 
                 low_days = week_daily_data[week_daily_data["Low"] == week_low]
                 if not low_days.empty:
@@ -68,14 +88,57 @@ class OccurrenceMetrics(BaseMetric):
                     "Low in Wednesday": round((low_counts[2] / total_weeks) * 100, 2),
                     "Low in Thursday": round((low_counts[3] / total_weeks) * 100, 2),
                     "Low in Friday": round((low_counts[4] / total_weeks) * 100, 2),
-                    "PDH Probability": round(
-                        self._calculate_pdh_probability(daily_data), 2
+                    # Bullish High metrics
+                    "Bullish High in Monday": (
+                        round((bullish_high_counts[0] / total_bullish_weeks) * 100, 2)
+                        if total_bullish_weeks > 0
+                        else 0.0
                     ),
-                    "PDL Probability": round(
-                        self._calculate_pdl_probability(daily_data), 2
+                    "Bullish High in Tuesday": (
+                        round((bullish_high_counts[1] / total_bullish_weeks) * 100, 2)
+                        if total_bullish_weeks > 0
+                        else 0.0
                     ),
-                    "PD Levels Probability": round(
-                        self._calculate_pd_levels_probability(daily_data), 2
+                    "Bullish High in Wednesday": (
+                        round((bullish_high_counts[2] / total_bullish_weeks) * 100, 2)
+                        if total_bullish_weeks > 0
+                        else 0.0
+                    ),
+                    "Bullish High in Thursday": (
+                        round((bullish_high_counts[3] / total_bullish_weeks) * 100, 2)
+                        if total_bullish_weeks > 0
+                        else 0.0
+                    ),
+                    "Bullish High in Friday": (
+                        round((bullish_high_counts[4] / total_bullish_weeks) * 100, 2)
+                        if total_bullish_weeks > 0
+                        else 0.0
+                    ),
+                    # Bearish High metrics
+                    "Bearish High in Monday": (
+                        round((bearish_high_counts[0] / total_bearish_weeks) * 100, 2)
+                        if total_bearish_weeks > 0
+                        else 0.0
+                    ),
+                    "Bearish High in Tuesday": (
+                        round((bearish_high_counts[1] / total_bearish_weeks) * 100, 2)
+                        if total_bearish_weeks > 0
+                        else 0.0
+                    ),
+                    "Bearish High in Wednesday": (
+                        round((bearish_high_counts[2] / total_bearish_weeks) * 100, 2)
+                        if total_bearish_weeks > 0
+                        else 0.0
+                    ),
+                    "Bearish High in Thursday": (
+                        round((bearish_high_counts[3] / total_bearish_weeks) * 100, 2)
+                        if total_bearish_weeks > 0
+                        else 0.0
+                    ),
+                    "Bearish High in Friday": (
+                        round((bearish_high_counts[4] / total_bearish_weeks) * 100, 2)
+                        if total_bearish_weeks > 0
+                        else 0.0
                     ),
                 }
             else:
@@ -88,88 +151,31 @@ class OccurrenceMetrics(BaseMetric):
             return self._get_empty_metrics()
 
     def _get_empty_metrics(self) -> dict:
-        """Return empty metrics structure"""
-        return {
-            "High in Monday": 0.0,
-            "High in Tuesday": 0.0,
-            "High in Wednesday": 0.0,
-            "High in Thursday": 0.0,
-            "High in Friday": 0.0,
-            "Low in Monday": 0.0,
-            "Low in Tuesday": 0.0,
-            "Low in Wednesday": 0.0,
-            "Low in Thursday": 0.0,
-            "Low in Friday": 0.0,
-            "PDH Probability": 0.0,
-            "PDL Probability": 0.0,
-            "PD Levels Probability": 0.0,
-        }
+        return self._get_default_metrics(self._get_metric_names())
 
-    def _calculate_pdh_probability(self, daily_data: pd.DataFrame) -> float:
-        """Calculate probability that ONLY previous day high (PDH) is taken out (not both PDH and PDL)"""
-        if len(daily_data) < 2:
-            return 0.0
-
-        pdh_only_taken_count = 0
-        total_days = 0
-
-        for i in range(1, len(daily_data)):
-            prev_day_high = daily_data.iloc[i - 1]["High"]
-            prev_day_low = daily_data.iloc[i - 1]["Low"]
-            current_day_high = daily_data.iloc[i]["High"]
-            current_day_low = daily_data.iloc[i]["Low"]
-
-            pdh_taken = current_day_high > prev_day_high
-            pdl_taken = current_day_low < prev_day_low
-
-            # Count only if PDH is taken but PDL is NOT taken
-            if pdh_taken and not pdl_taken:
-                pdh_only_taken_count += 1
-            total_days += 1
-
-        return (pdh_only_taken_count / total_days * 100) if total_days > 0 else 0.0
-
-    def _calculate_pdl_probability(self, daily_data: pd.DataFrame) -> float:
-        """Calculate probability that ONLY previous day low (PDL) is taken out (not both PDH and PDL)"""
-        if len(daily_data) < 2:
-            return 0.0
-
-        pdl_only_taken_count = 0
-        total_days = 0
-
-        for i in range(1, len(daily_data)):
-            prev_day_high = daily_data.iloc[i - 1]["High"]
-            prev_day_low = daily_data.iloc[i - 1]["Low"]
-            current_day_high = daily_data.iloc[i]["High"]
-            current_day_low = daily_data.iloc[i]["Low"]
-
-            pdh_taken = current_day_high > prev_day_high
-            pdl_taken = current_day_low < prev_day_low
-
-            # Count only if PDL is taken but PDH is NOT taken
-            if pdl_taken and not pdh_taken:
-                pdl_only_taken_count += 1
-            total_days += 1
-
-        return (pdl_only_taken_count / total_days * 100) if total_days > 0 else 0.0
-
-    def _calculate_pd_levels_probability(self, daily_data: pd.DataFrame) -> float:
-        """Calculate probability that BOTH PDH AND PDL are taken out"""
-        if len(daily_data) < 2:
-            return 0.0
-
-        both_levels_taken_count = 0
-        total_days = 0
-
-        for i in range(1, len(daily_data)):
-            prev_day_high = daily_data.iloc[i - 1]["High"]
-            prev_day_low = daily_data.iloc[i - 1]["Low"]
-            current_day_high = daily_data.iloc[i]["High"]
-            current_day_low = daily_data.iloc[i]["Low"]
-
-            # Both PDH AND PDL must be taken (changed from OR to AND)
-            if current_day_high > prev_day_high and current_day_low < prev_day_low:
-                both_levels_taken_count += 1
-            total_days += 1
-
-        return (both_levels_taken_count / total_days * 100) if total_days > 0 else 0.0
+    def _get_metric_names(self) -> list[str]:
+        """Return list of metric names for this calculator."""
+        return [
+            "High in Monday",
+            "High in Tuesday",
+            "High in Wednesday",
+            "High in Thursday",
+            "High in Friday",
+            "Low in Monday",
+            "Low in Tuesday",
+            "Low in Wednesday",
+            "Low in Thursday",
+            "Low in Friday",
+            # Bullish High metrics
+            "Bullish High in Monday",
+            "Bullish High in Tuesday",
+            "Bullish High in Wednesday",
+            "Bullish High in Thursday",
+            "Bullish High in Friday",
+            # Bearish High metrics
+            "Bearish High in Monday",
+            "Bearish High in Tuesday",
+            "Bearish High in Wednesday",
+            "Bearish High in Thursday",
+            "Bearish High in Friday",
+        ]

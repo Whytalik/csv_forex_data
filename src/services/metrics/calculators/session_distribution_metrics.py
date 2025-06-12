@@ -3,13 +3,12 @@ import pandas as pd  # type: ignore
 import logging
 from ..base_metric import BaseMetric
 from config.sessions_config import SESSIONS
-from services.utils import is_time_in_session
+from utils.session_utils import is_time_in_session
 
 
 class SessionDistributionMetrics(BaseMetric):
     def __init__(self, timeframes_dir: Path):
         super().__init__(timeframes_dir)
-        # Create cache directory in the parent of timeframes_dir
         data_dir = timeframes_dir.parent
         self.cache_dir = data_dir / "metrics" / "session_distribution"
         self.cache_dir.mkdir(parents=True, exist_ok=True)  # Setup logging
@@ -147,7 +146,7 @@ class SessionDistributionMetrics(BaseMetric):
                         out_of_session_high = max(out_of_session_high, row["High"])
                         out_of_session_low = min(out_of_session_low, row["Low"])
 
-            # Find which session had the daily high and low
+            # Find which session had the and low
             all_highs = dict(session_highs)
             all_lows = dict(session_lows)
 
@@ -426,20 +425,15 @@ class SessionDistributionMetrics(BaseMetric):
         return metrics
 
     def get_directional_metrics(self, daily_session_df: pd.DataFrame) -> dict:
-        """
-        Calculate directional metrics using cached session data.
-        Considers chronological order - levels can only be broken once.
-        """
         if daily_session_df.empty:
             return {}
 
         metrics = {}
-        # Define chronological order of sessions throughout the trading day
         session_order = ["Asia", "Frankfurt", "London", "Lunch", "NY", "Out of Session"]
 
         for i, session1 in enumerate(session_order):
             for j, session2 in enumerate(session_order):
-                if j <= i:  # Only consider sessions that come AFTER session1
+                if j <= i:
                     continue
 
                 session1_high_col = f"{session1}_high"
@@ -447,7 +441,6 @@ class SessionDistributionMetrics(BaseMetric):
                 session2_low_col = f"{session2}_low"
                 session2_high_col = f"{session2}_high"
 
-                # Bullish: session2 breaks session1's low (and it hasn't been broken yet)
                 if all(
                     col in daily_session_df.columns
                     for col in [session1_low_col, session2_low_col]
@@ -456,21 +449,15 @@ class SessionDistributionMetrics(BaseMetric):
                         subset=[session1_low_col, session2_low_col]
                     )
                     if not valid_data.empty:
-                        # Check if session2 breaks session1's low AND
-                        # no intermediate session has already broken it
                         breaks_count = 0
 
                         for _, row in valid_data.iterrows():
                             session1_low = row[session1_low_col]
                             session2_low = row[session2_low_col]
 
-                            # Check if session2 breaks session1's low
                             if session2_low < session1_low:
-                                # Check if any intermediate session already broke it
                                 already_broken = False
-                                for k in range(
-                                    i + 1, j
-                                ):  # Check sessions between session1 and session2
+                                for k in range(i + 1, j):
                                     intermediate_session = session_order[k]
                                     intermediate_low_col = f"{intermediate_session}_low"
 
@@ -494,7 +481,6 @@ class SessionDistributionMetrics(BaseMetric):
                         )
                         metrics[f"Bullish {session2}-{session1} Low %"] = percentage
 
-                # Bearish: session2 breaks session1's high (and it hasn't been broken yet)
                 if all(
                     col in daily_session_df.columns
                     for col in [session1_high_col, session2_high_col]
@@ -503,21 +489,15 @@ class SessionDistributionMetrics(BaseMetric):
                         subset=[session1_high_col, session2_high_col]
                     )
                     if not valid_data.empty:
-                        # Check if session2 breaks session1's high AND
-                        # no intermediate session has already broken it
                         breaks_count = 0
 
                         for _, row in valid_data.iterrows():
                             session1_high = row[session1_high_col]
                             session2_high = row[session2_high_col]
 
-                            # Check if session2 breaks session1's high
                             if session2_high > session1_high:
-                                # Check if any intermediate session already broke it
                                 already_broken = False
-                                for k in range(
-                                    i + 1, j
-                                ):  # Check sessions between session1 and session2
+                                for k in range(i + 1, j):
                                     intermediate_session = session_order[k]
                                     intermediate_high_col = (
                                         f"{intermediate_session}_high"
@@ -547,5 +527,151 @@ class SessionDistributionMetrics(BaseMetric):
                             else 0.0
                         )
                         metrics[f"Bearish {session2}-{session1} High %"] = percentage
+
+        return metrics
+
+    def get_directional_session_distribution(
+        self, daily_session_df: pd.DataFrame
+    ) -> dict:
+        """
+        Calculate directional session distribution metrics (Bullish/Bearish Daily High/Low per session).
+        Returns percentages of when daily high/low occurs in specific sessions during bullish/bearish days.
+        """
+        if daily_session_df.empty:
+            return {}
+
+        self.logger.info("Calculating directional session distribution percentages")
+
+        # Add a column to determine if day is bullish or bearish
+        daily_session_df["is_bullish"] = False
+        daily_session_df["is_bearish"] = False
+
+        for idx, row in daily_session_df.iterrows():
+            # If daily data has Open/Close, use it to determine direction
+            # For daily df from 5min data, create a simple condition
+            if all(col in daily_session_df.columns for col in ["Open", "Close"]):
+                daily_session_df.at[idx, "is_bullish"] = row["Close"] > row["Open"]
+                daily_session_df.at[idx, "is_bearish"] = row["Close"] < row["Open"]
+            else:
+                # Approximate direction using session data
+                # If highest value is later in the day than lowest, consider it bullish
+                sessions_order = [
+                    "Asia",
+                    "Frankfurt",
+                    "London",
+                    "Lunch",
+                    "NY",
+                    "Out of Session",
+                ]
+                high_session_idx = (
+                    sessions_order.index(row["daily_high_session"])
+                    if row["daily_high_session"] in sessions_order
+                    else -1
+                )
+                low_session_idx = (
+                    sessions_order.index(row["daily_low_session"])
+                    if row["daily_low_session"] in sessions_order
+                    else -1
+                )
+
+                # If we have both indices, compare them
+                if high_session_idx >= 0 and low_session_idx >= 0:
+                    daily_session_df.at[idx, "is_bullish"] = (
+                        high_session_idx > low_session_idx
+                    )
+                    daily_session_df.at[idx, "is_bearish"] = (
+                        high_session_idx < low_session_idx
+                    )
+
+        # Filter bullish and bearish days
+        bullish_days = daily_session_df[daily_session_df["is_bullish"]]
+        bearish_days = daily_session_df[daily_session_df["is_bearish"]]
+
+        total_bullish = len(bullish_days)
+        total_bearish = len(bearish_days)
+
+        self.logger.info(
+            f"Found {total_bullish} bullish days and {total_bearish} bearish days"
+        )
+
+        metrics = {}
+
+        # Process all sessions including Out of Session
+        all_sessions = list(SESSIONS.keys()) + ["Out of Session"]
+
+        # Calculate bullish metrics
+        if total_bullish > 0:
+            # Count occurrences of each session producing high/low in bullish days
+            bullish_high_counts = {session: 0 for session in all_sessions}
+            bullish_low_counts = {session: 0 for session in all_sessions}
+
+            for _, row in bullish_days.iterrows():
+                daily_high_session = row["daily_high_session"]
+                daily_low_session = row["daily_low_session"]
+
+                if daily_high_session in bullish_high_counts:
+                    bullish_high_counts[daily_high_session] += 1
+                if daily_low_session in bullish_low_counts:
+                    bullish_low_counts[daily_low_session] += 1
+
+            # Calculate percentages
+            for session_name in all_sessions:
+                high_percentage = self.round_metric(
+                    (bullish_high_counts[session_name] / total_bullish) * 100
+                )
+                low_percentage = self.round_metric(
+                    (bullish_low_counts[session_name] / total_bullish) * 100
+                )
+
+                metrics[f"Bullish Daily High in {session_name} %"] = high_percentage
+                metrics[f"Bullish Daily Low in {session_name} %"] = low_percentage
+        else:
+            # Set default values if no bullish days
+            for session_name in all_sessions:
+                metrics[f"Bullish Daily High in {session_name} %"] = 0.0
+                metrics[f"Bullish Daily Low in {session_name} %"] = 0.0
+
+        # Calculate bearish metrics
+        if total_bearish > 0:
+            # Count occurrences of each session producing high/low in bearish days
+            bearish_high_counts = {session: 0 for session in all_sessions}
+            bearish_low_counts = {session: 0 for session in all_sessions}
+
+            for _, row in bearish_days.iterrows():
+                daily_high_session = row["daily_high_session"]
+                daily_low_session = row["daily_low_session"]
+
+                if daily_high_session in bearish_high_counts:
+                    bearish_high_counts[daily_high_session] += 1
+                if daily_low_session in bearish_low_counts:
+                    bearish_low_counts[daily_low_session] += 1
+
+            # Calculate percentages
+            for session_name in all_sessions:
+                high_percentage = self.round_metric(
+                    (bearish_high_counts[session_name] / total_bearish) * 100
+                )
+                low_percentage = self.round_metric(
+                    (bearish_low_counts[session_name] / total_bearish) * 100
+                )
+
+                metrics[f"Bearish Daily High in {session_name} %"] = high_percentage
+                metrics[f"Bearish Daily Low in {session_name} %"] = low_percentage
+        else:
+            # Set default values if no bearish days
+            for session_name in all_sessions:
+                metrics[f"Bearish Daily High in {session_name} %"] = 0.0
+                metrics[f"Bearish Daily Low in {session_name} %"] = 0.0
+
+        # Log summary
+        self.logger.info("Directional Session Distribution Summary:")
+        for session in all_sessions:
+            bullish_high = metrics.get(f"Bullish Daily High in {session} %", 0)
+            bullish_low = metrics.get(f"Bullish Daily Low in {session} %", 0)
+            bearish_high = metrics.get(f"Bearish Daily High in {session} %", 0)
+            bearish_low = metrics.get(f"Bearish Daily Low in {session} %", 0)
+            self.logger.info(
+                f"  {session}: Bullish High {bullish_high}%, Low {bullish_low}%, Bearish High {bearish_high}%, Low {bearish_low}%"
+            )
 
         return metrics

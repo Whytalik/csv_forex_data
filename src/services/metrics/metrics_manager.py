@@ -3,8 +3,8 @@ from typing import Dict, Any
 from .calculators.volatility_metrics import VolatilityMetrics
 from .calculators.session_distribution_metrics import SessionDistributionMetrics
 from .calculators.intraday_metrics import IntradayMetrics
-from .calculators.directional_metrics import DirectionalMetrics
 from .calculators.occurrence_metrics import OccurrenceMetrics
+from .calculators.levels_metrics import LevelsMetrics
 
 
 class MetricsManager:
@@ -16,8 +16,8 @@ class MetricsManager:
                 timeframes_dir
             ),
             "Intraday Interval High/Low Percentages": IntradayMetrics(timeframes_dir),
-            "Bullish / Bearish Specific Metrics": DirectionalMetrics(timeframes_dir),
             "Daily/Weekly Occurrence Statistics": OccurrenceMetrics(timeframes_dir),
+            "Key Levels": LevelsMetrics(timeframes_dir),
         }
 
     def calculate_all_metrics(self, symbol: str, year: str) -> Dict[str, Any]:

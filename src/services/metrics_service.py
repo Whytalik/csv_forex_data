@@ -1,6 +1,9 @@
 from pathlib import Path
 from typing import Dict, Any
-from config.metrics import get_metrics_for_profile
+from utils.profile_metrics import (
+    get_metrics_for_profile,
+    filter_profile_metrics_by_category,
+)
 from services.metrics.metrics_manager import MetricsManager
 
 
@@ -23,14 +26,16 @@ class MetricsService:
         year = self._extract_year_from_file(symbol)
         return self.metrics_manager.calculate_all_metrics(symbol, year)
 
-    def calculate_metrics_for_profile(self, symbol: str, profile: str) -> Dict[str, Dict[str, Any]]:
+    def calculate_metrics_for_profile(
+        self, symbol: str, profile: str
+    ) -> Dict[str, Dict[str, Any]]:
         """Calculate metrics for a specific profile"""
         year = self._extract_year_from_file(symbol)
         all_metrics = self.metrics_manager.calculate_all_metrics(symbol, year)
-        
+
         # Get profile-specific metrics configuration
         profile_metrics = get_metrics_for_profile(profile)
-        
+
         # Filter metrics based on profile configuration
         grouped_metrics = {}
         for category, metrics_list in profile_metrics.items():
@@ -39,5 +44,8 @@ class MetricsService:
             }
             if category_metrics:
                 grouped_metrics[category] = category_metrics
-        
-        return grouped_metrics
+
+        # Apply additional filtering for number properties only
+        filtered_metrics = filter_profile_metrics_by_category(grouped_metrics, profile)
+
+        return filtered_metrics

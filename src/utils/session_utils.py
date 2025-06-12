@@ -1,3 +1,7 @@
+"""
+Утиліти для роботи з торговими сесіями
+"""
+
 import pandas as pd
 from config.pairs_config import PAIRS
 from config.sessions_config import SESSIONS

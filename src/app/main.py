@@ -2,21 +2,28 @@ import sys
 from pathlib import Path
 import asyncio
 import time
+from concurrent.futures import ThreadPoolExecutor
+import functools
 
 src_path = Path(__file__).parent.parent
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from services.csv_service import (
+from services.csv import (
     collect_csv_files,
     merge_csv_files,
     reformat_data,
     create_timeframes_csv,
 )
 from config.settings import DATA_PATH
-from config.metrics import get_metrics_for_profile, group_metrics_by_category
+from utils.profile_metrics import (
+    get_metrics_for_profile,
+    group_metrics_by_category,
+    get_all_metrics_for_profile,
+    filter_profile_metrics_by_category,
+)
 from config.timeframes_config import TIMEFRAMES
-from services.notion_client import NotionClient
+from services.notion import NotionClient
 from config.notion_settings import (
     NOTION_ENDPOINT,
     PROFILES,
@@ -26,13 +33,13 @@ from config.notion_settings import (
 from services.metrics_service import MetricsService
 
 
-async def process_single_symbol(
+def process_single_symbol_sync(
     symbol_dir: Path,
     processed_data_root: Path,
     formatted_data_root: Path,
     timeframes_data_root: Path,
 ) -> tuple[str, dict] | None:
-    """Process a single symbol and return its metrics"""
+    """Synchronous function to process a single symbol and return its metrics"""
     try:
         symbol = symbol_dir.name
         start_time = time.time()
@@ -63,6 +70,25 @@ async def process_single_symbol(
         return None
 
 
+async def process_single_symbol(
+    symbol_dir: Path,
+    processed_data_root: Path,
+    formatted_data_root: Path,
+    timeframes_data_root: Path,
+    executor: ThreadPoolExecutor,
+) -> tuple[str, dict] | None:
+    """Async wrapper for processing a single symbol using thread executor"""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        executor,
+        process_single_symbol_sync,
+        symbol_dir,
+        processed_data_root,
+        formatted_data_root,
+        timeframes_data_root,
+    )
+
+
 async def process_data_and_calculate_metrics():
     """Process all symbols in parallel with limited concurrency"""
     start_time = time.time()
@@ -87,24 +113,31 @@ async def process_data_and_calculate_metrics():
 
     print(f"🚀 Starting parallel processing of {len(symbol_dirs)} symbols...")
 
-    # Create semaphore to limit concurrent processing (avoid overwhelming system)
-    semaphore = asyncio.Semaphore(5)  # Increased from 3 to 5 for better performance
+    # Create thread executor for CPU-intensive tasks
+    max_workers = min(5, len(symbol_dirs))  # Adjust based on your system
 
-    async def process_with_semaphore(symbol_dir):
-        async with semaphore:
-            return await process_single_symbol(
-                symbol_dir,
-                processed_data_root,
-                formatted_data_root,
-                timeframes_data_root,
-            )
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Create semaphore to limit concurrent processing (avoid overwhelming system)
+        semaphore = asyncio.Semaphore(max_workers)
 
-    # Process all symbols in parallel with progress tracking
-    tasks = [process_with_semaphore(symbol_dir) for symbol_dir in symbol_dirs]
+        async def process_with_semaphore(symbol_dir):
+            async with semaphore:
+                return await process_single_symbol(
+                    symbol_dir,
+                    processed_data_root,
+                    formatted_data_root,
+                    timeframes_data_root,
+                    executor,
+                )
 
-    # Use asyncio.gather with return_exceptions to handle errors gracefully
-    print(f"📊 Processing {len(tasks)} symbols in parallel (max 5 concurrent)...")
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Process all symbols in parallel with progress tracking
+        tasks = [process_with_semaphore(symbol_dir) for symbol_dir in symbol_dirs]
+
+        # Use asyncio.gather with return_exceptions to handle errors gracefully
+        print(
+            f"📊 Processing {len(tasks)} symbols in parallel (max {max_workers} concurrent)..."
+        )
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
     # Collect successful results
     metrics_by_symbol = {}
@@ -177,14 +210,27 @@ async def upload_metrics_to_notion(metrics: dict):
 
             print("🔧 Ensuring all properties exist...")
             profile_metrics = get_metrics_for_profile(profile)
-            property_tasks = []
-            for category, metrics_list in profile_metrics.items():
-                for metric in metrics_list:
-                    property_tasks.append(
-                        notion_client.ensure_property_exists(metric, "number")
-                    )
 
-            await asyncio.gather(*property_tasks, return_exceptions=True)
+            # Collect all metrics names into a single list
+            all_metrics_names = []
+            for category, metrics_list in profile_metrics.items():
+                all_metrics_names.extend(metrics_list)
+
+            # Ensure all properties exist in batch
+            success, created_properties = (
+                await notion_client.ensure_properties_exist_batch(
+                    all_metrics_names, "number"
+                )
+            )
+
+            # If any properties were newly created, add a small delay to allow Notion API to register them
+            if created_properties:
+                print(
+                    f"⏳ Waiting for Notion API to register {len(created_properties)} newly created properties..."
+                )
+                await asyncio.sleep(
+                    3
+                )  # 3-second delay for Notion API to register properties
 
             print("📊 Preparing metrics for batch upload...")
             upload_tasks = []
@@ -194,12 +240,19 @@ async def upload_metrics_to_notion(metrics: dict):
                     print(f"⚠️ Skipping {symbol} - not found in {profile}'s database")
                     continue
 
+                # Фільтруємо метрики для конкретного профілю
+                filtered_symbol_metrics = filter_profile_metrics_by_category(
+                    symbol_metrics, profile
+                )
+
                 symbol_metrics_to_upload = {}
                 for category, metrics_list in profile_metrics.items():
-                    if category in symbol_metrics and isinstance(
-                        symbol_metrics[category], dict
+                    if category in filtered_symbol_metrics and isinstance(
+                        filtered_symbol_metrics[category], dict
                     ):
-                        for metric_name, value in symbol_metrics[category].items():
+                        for metric_name, value in filtered_symbol_metrics[
+                            category
+                        ].items():
                             if metric_name in metrics_list:
                                 if isinstance(value, (int, float)):
                                     symbol_metrics_to_upload[metric_name] = round(

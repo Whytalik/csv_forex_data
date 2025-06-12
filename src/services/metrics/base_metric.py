@@ -7,21 +7,12 @@ from functools import lru_cache
 class BaseMetric(ABC):
     def __init__(self, timeframes_dir: Path):
         self.timeframes_dir = timeframes_dir
-        self._data_cache = {}  # Cache for loaded data
+        self._data_cache = {}
 
     @lru_cache(maxsize=128)
     def filter_anomalies(
         self, df_hash: int, columns_tuple: tuple, n_std: float = 3
     ) -> pd.DataFrame:
-        """
-        Filter out anomalies using standard deviation method with caching
-        :param df_hash: Hash of DataFrame for caching
-        :param columns_tuple: Tuple of columns to check for anomalies
-        :param n_std: Number of standard deviations to use as threshold (default 3)
-        :return: Filtered DataFrame
-        """
-        # This is a placeholder - actual implementation would need the DataFrame
-        # The caching is done at the load_timeframe_data level instead
         pass
 
     def _filter_anomalies_internal(
@@ -51,7 +42,6 @@ class BaseMetric(ABC):
         """Load data for specific timeframe with caching"""
         cache_key = f"{symbol}_{timeframe}_{year}"
 
-        # Check cache first
         if cache_key in self._data_cache:
             return self._data_cache[cache_key].copy()
 
@@ -63,7 +53,6 @@ class BaseMetric(ABC):
                 f"No data file found for {symbol} {timeframe} {year}"
             )
 
-        # Load data with optimized settings
         df = pd.read_csv(
             file_path,
             index_col=0,
@@ -76,12 +65,11 @@ class BaseMetric(ABC):
             },
         )
 
-        # Filter anomalies
         std_threshold = 5 if timeframe == "1w" else 3
         df = self._filter_anomalies_internal(
             df, ["Open", "High", "Low", "Close"], std_threshold
-        )  # Cache the data (limit cache size to prevent memory issues)
-        if len(self._data_cache) < 50:  # Limit cache size
+        )
+        if len(self._data_cache) < 50:
             self._data_cache[cache_key] = df.copy()
 
         return df
@@ -103,10 +91,11 @@ class BaseMetric(ABC):
         except (ValueError, TypeError):
             return 0.0
 
-    @abstractmethod
-    def calculate(self, symbol: str, year: str) -> dict:
-        """Calculate metric values"""
-        pass
+    def _get_default_metrics(self, metric_names: list[str] = None) -> dict:
+        if not metric_names:
+            return {}
+
+        return {metric_name: 0.0 for metric_name in metric_names}
 
     @abstractmethod
     def calculate(self, symbol: str, year: str) -> dict:

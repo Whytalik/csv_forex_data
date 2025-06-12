@@ -10,7 +10,7 @@ API_SETTINGS = {
     "Infobase": {
         "API_KEY": "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",
         "DATABASE_ID": "20d56d60af3680a09982e49ba70107cf",
-    }
+    },
 }
 
 PROFILES = list(API_SETTINGS.keys())
