@@ -4,19 +4,8 @@ from datetime import datetime
 
 
 def reformat_data(input_path: Path, output_file: Path) -> Path | None:
-    """
-    Reformat data from merged CSV file.
-    Returns the path to the reformatted file (either existing or newly created).
-
-    Args:
-        input_path: Path to the input merged CSV file
-        output_file: Path where to save the reformatted file
-
-    Returns:
-        Path to the reformatted file or None if failed
-    """
     if output_file.exists():
-        print(f"ℹ️ Reformatted file already exists: {output_file}")
+        print(f"ℹ️ Reformatted file already exists: {output_file.name}")
         return output_file
 
     try:
@@ -26,11 +15,7 @@ def reformat_data(input_path: Path, output_file: Path) -> Path | None:
             header=None,
             names=["datetime", "open", "high", "low", "close"],
         )
-        df["datetime"] = df["datetime"].apply(
-            lambda x: (
-                datetime.strptime(str(x), "%Y%m%d %H%M%S") + pd.Timedelta(days=1)
-            ).strftime("%Y-%m-%d %H:%M:%S")
-        )
+        df["datetime"] = df["datetime"].apply(adjust_datetime)
 
         df.to_csv(
             output_file,
@@ -43,3 +28,15 @@ def reformat_data(input_path: Path, output_file: Path) -> Path | None:
     except Exception as e:
         print(f"❌ Error reformatting data: {e}")
         return None
+
+
+def adjust_datetime(dt_str):
+    dt = datetime.strptime(str(dt_str), "%Y%m%d %H%M%S")
+
+    # Конвертуємо в UTC+3
+    local_dt = dt + pd.Timedelta(hours=3)
+
+    # Додаємо один день, щоб відображати за торговим днем
+    local_dt = local_dt + pd.Timedelta(days=1)
+
+    return local_dt.strftime("%Y-%m-%d %H:%M:%S")

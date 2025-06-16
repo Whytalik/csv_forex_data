@@ -71,17 +71,15 @@ class SessionDistributionMetrics(BaseMetric):
         self.logger.info(f"Preparing daily session data for {symbol} {year}")
 
         # Load 5-minute data for detailed session analysis
-        self.logger.info(f"Loading 5-minute data for {symbol} {year}")
         five_minute_data = self.load_timeframe_data(symbol, year, "5m")
 
         if five_minute_data.empty:
             self.logger.warning(f"No 5-minute data found for {symbol} {year}")
             return pd.DataFrame()
 
-        self.logger.info(f"Processing {len(five_minute_data)} 5-minute data points")
+        self.logger.info(f"Loaded {symbol} {year}: {len(five_minute_data):,} 5m points")
 
         # Group by trading day (since trading day starts at 21:00)
-        self.logger.info("Grouping data by trading days")
         daily_groups = {}
 
         for timestamp, row in five_minute_data.iterrows():
@@ -98,7 +96,7 @@ class SessionDistributionMetrics(BaseMetric):
             daily_groups[trading_date].append((timestamp, row))
 
         total_days = len(daily_groups)
-        self.logger.info(f"Found {total_days} trading days to process")
+        self.logger.info(f"Found {total_days:,} trading days to process")
 
         # Process each trading day to find session highs/lows
         daily_results = []

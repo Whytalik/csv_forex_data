@@ -9,16 +9,20 @@ class DataCache:
         self.cache: Dict[str, Any] = {}
         self.access_times: Dict[str, float] = {}
         self.max_size = max_size
+        self.cache_version = "v2"  # Add version to invalidate old cache entries
 
     def get(self, key: str) -> Optional[Any]:
         """Get cached data"""
-        if key in self.cache:
-            self.access_times[key] = time.time()
-            return self.cache[key]
+        versioned_key = f"{key}_{self.cache_version}"
+        if versioned_key in self.cache:
+            self.access_times[versioned_key] = time.time()
+            return self.cache[versioned_key]
         return None
 
     def set(self, key: str, value: Any) -> None:
         """Set cached data with LRU eviction"""
+        versioned_key = f"{key}_{self.cache_version}"
+
         if len(self.cache) >= self.max_size:
             # Remove least recently used item
             oldest_key = min(
@@ -27,8 +31,8 @@ class DataCache:
             del self.cache[oldest_key]
             del self.access_times[oldest_key]
 
-        self.cache[key] = value
-        self.access_times[key] = time.time()
+        self.cache[versioned_key] = value
+        self.access_times[versioned_key] = time.time()
 
     def clear(self) -> None:
         """Clear all cached data"""
