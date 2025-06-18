@@ -9,7 +9,7 @@ class VolatilityMetrics(BaseMetric):
         try:
             daily_data = self.load_timeframe_data(symbol, year, "1d")
             weekly_data = self.load_timeframe_data(symbol, year, "1w")
-            one_minute_data = self.load_timeframe_data(symbol, year, "1m")
+            five_minute_data = self.load_timeframe_data(symbol, year, "5m")
             pip_factor = PAIRS[symbol.upper()]["pip_factor"]
 
             if daily_data.empty or weekly_data.empty:
@@ -32,11 +32,11 @@ class VolatilityMetrics(BaseMetric):
             )
 
             # Calculate session ranges
-            asia_range = get_session_range("Asia", one_minute_data, symbol)
-            frankfurt_range = get_session_range("Frankfurt", one_minute_data, symbol)
-            london_range = get_session_range("London", one_minute_data, symbol)
-            lunch_range = get_session_range("Lunch", one_minute_data, symbol)
-            ny_range = get_session_range("NY", one_minute_data, symbol)
+            asia_range = get_session_range("Asia", five_minute_data, symbol)
+            frankfurt_range = get_session_range("Frankfurt", five_minute_data, symbol)
+            london_range = get_session_range("London", five_minute_data, symbol)
+            lunch_range = get_session_range("Lunch", five_minute_data, symbol)
+            ny_range = get_session_range("NY", five_minute_data, symbol)
 
             # Calculate daily ranges for each weekday
             weekday_ranges = {}

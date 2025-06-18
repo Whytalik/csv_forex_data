@@ -1,6 +1,6 @@
 from pathlib import Path
 import pandas as pd  # type: ignore
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 def reformat_data(input_path: Path, output_file: Path) -> Path | None:
@@ -32,11 +32,4 @@ def reformat_data(input_path: Path, output_file: Path) -> Path | None:
 
 def adjust_datetime(dt_str):
     dt = datetime.strptime(str(dt_str), "%Y%m%d %H%M%S")
-
-    # Конвертуємо в UTC+3
-    local_dt = dt + pd.Timedelta(hours=3)
-
-    # Додаємо один день, щоб відображати за торговим днем
-    local_dt = local_dt + pd.Timedelta(days=1)
-
-    return local_dt.strftime("%Y-%m-%d %H:%M:%S")
+    return dt.strftime("%Y-%m-%d %H:%M:%S")

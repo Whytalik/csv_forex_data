@@ -3,7 +3,6 @@ from pathlib import Path
 import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
-import functools
 
 src_path = Path(__file__).parent.parent
 if str(src_path) not in sys.path:
@@ -19,10 +18,8 @@ from config.settings import DATA_PATH
 from utils.profile_metrics import (
     get_metrics_for_profile,
     group_metrics_by_category,
-    get_all_metrics_for_profile,
     filter_profile_metrics_by_category,
 )
-from config.timeframes_config import TIMEFRAMES
 from services.notion import NotionClient
 from config.notion_settings import (
     NOTION_ENDPOINT,
@@ -33,43 +30,6 @@ from config.notion_settings import (
 from services.metrics_service import MetricsService
 
 
-def process_single_symbol_sync(
-    symbol_dir: Path,
-    processed_data_root: Path,
-    formatted_data_root: Path,
-    timeframes_data_root: Path,
-) -> tuple[str, dict] | None:
-    """Synchronous function to process a single symbol and return its metrics"""
-    try:
-        symbol = symbol_dir.name
-        start_time = time.time()
-        print(f"🔄 Processing {symbol}...")
-
-        collected_files = collect_csv_files(symbol_dir)
-        merged_file = merge_csv_files(collected_files, processed_data_root, symbol)
-
-        if merged_file is not None:
-            year = merged_file.stem.split("_")[-1]
-            formatted_file = formatted_data_root / f"{symbol}_formatted_{year}.csv"
-            formatted_path = reformat_data(merged_file, formatted_file)
-
-            if formatted_path:
-                print(f"✅ Successfully processed {symbol} data")
-
-                create_timeframes_csv(formatted_path, timeframes_data_root, symbol)
-
-                metrics_service = MetricsService(timeframes_data_root)
-                flat_metrics = metrics_service.calculate_all_metrics(symbol)
-
-                grouped_metrics = group_metrics_by_category(flat_metrics)
-                print(f"✅ Calculated metrics for {symbol}")
-                return symbol, grouped_metrics
-        return None
-    except Exception as e:
-        print(f"❌ Error processing {symbol}: {e}")
-        return None
-
-
 async def process_single_symbol(
     symbol_dir: Path,
     processed_data_root: Path,
@@ -77,16 +37,56 @@ async def process_single_symbol(
     timeframes_data_root: Path,
     executor: ThreadPoolExecutor,
 ) -> tuple[str, dict] | None:
-    """Async wrapper for processing a single symbol using thread executor"""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        executor,
-        process_single_symbol_sync,
-        symbol_dir,
-        processed_data_root,
-        formatted_data_root,
-        timeframes_data_root,
-    )
+    """Process a single symbol using thread executor for CPU-intensive tasks"""
+    try:
+        symbol = symbol_dir.name
+        print(f"🔄 Processing {symbol}...")
+
+        loop = asyncio.get_event_loop()
+
+        collected_files = await loop.run_in_executor(
+            executor, collect_csv_files, symbol_dir
+        )
+
+        merged_file = await loop.run_in_executor(
+            executor, merge_csv_files, collected_files, processed_data_root, symbol
+        )
+
+        if merged_file is None:
+            return None
+
+        year = merged_file.stem.split("_")[-1]
+        formatted_file = formatted_data_root / f"{symbol}_formatted_{year}.csv"
+
+        formatted_path = await loop.run_in_executor(
+            executor, reformat_data, merged_file, formatted_file
+        )
+
+        if formatted_path is None:
+            return None
+
+        await loop.run_in_executor(
+            executor,
+            create_timeframes_csv,
+            formatted_path,
+            timeframes_data_root,
+            symbol,
+        )
+
+        print(f"✅ Successfully processed {symbol} data")
+
+        metrics_service = MetricsService(timeframes_data_root)
+        flat_metrics = await loop.run_in_executor(
+            executor, metrics_service.calculate_all_metrics, symbol
+        )
+
+        grouped_metrics = group_metrics_by_category(flat_metrics)
+        print(f"✅ Calculated metrics for {symbol}")
+        return symbol, grouped_metrics
+
+    except Exception as e:
+        print(f"❌ Error processing {symbol}: {e}")
+        return None
 
 
 async def process_data_and_calculate_metrics():
@@ -117,7 +117,7 @@ async def process_data_and_calculate_metrics():
     max_workers = min(5, len(symbol_dirs))  # Adjust based on your system
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Create semaphore to limit concurrent processing (avoid overwhelming system)
+        # Create semaphore to limit concurrent processing
         semaphore = asyncio.Semaphore(max_workers)
 
         async def process_with_semaphore(symbol_dir):
@@ -130,10 +130,8 @@ async def process_data_and_calculate_metrics():
                     executor,
                 )
 
-        # Process all symbols in parallel with progress tracking
+        # Process all symbols in parallel
         tasks = [process_with_semaphore(symbol_dir) for symbol_dir in symbol_dirs]
-
-        # Use asyncio.gather with return_exceptions to handle errors gracefully
         print(
             f"📊 Processing {len(tasks)} symbols in parallel (max {max_workers} concurrent)..."
         )
@@ -162,37 +160,6 @@ async def process_data_and_calculate_metrics():
     )
 
     return metrics_by_symbol
-
-
-async def process_csv_operations_parallel(
-    symbol_dir: Path,
-    processed_data_root: Path,
-    formatted_data_root: Path,
-    timeframes_data_root: Path,
-) -> tuple[str, bool]:
-    """Process CSV operations for a single symbol in parallel"""
-    symbol = symbol_dir.name
-    try:
-        collected_files = collect_csv_files(symbol_dir)
-        merged_file = merge_csv_files(collected_files, processed_data_root, symbol)
-
-        if merged_file is None:
-            return symbol, False
-
-        year = merged_file.stem.split("_")[-1]
-        formatted_file = formatted_data_root / f"{symbol}_formatted_{year}.csv"
-        formatted_path = reformat_data(merged_file, formatted_file)
-
-        if formatted_path is None:
-            return symbol, False
-
-        create_timeframes_csv(formatted_path, timeframes_data_root, symbol)
-
-        return symbol, True
-
-    except Exception as e:
-        print(f"❌ Error in CSV processing for {symbol}: {e}")
-        return symbol, False
 
 
 async def upload_metrics_to_notion(metrics: dict):
@@ -228,9 +195,7 @@ async def upload_metrics_to_notion(metrics: dict):
                 print(
                     f"⏳ Waiting for Notion API to register {len(created_properties)} newly created properties..."
                 )
-                await asyncio.sleep(
-                    3
-                )  # 3-second delay for Notion API to register properties
+                await asyncio.sleep(3)
 
             print("📊 Preparing metrics for batch upload...")
             upload_tasks = []
@@ -240,7 +205,7 @@ async def upload_metrics_to_notion(metrics: dict):
                     print(f"⚠️ Skipping {symbol} - not found in {profile}'s database")
                     continue
 
-                # Фільтруємо метрики для конкретного профілю
+                # Filter metrics for specific profile
                 filtered_symbol_metrics = filter_profile_metrics_by_category(
                     symbol_metrics, profile
                 )

@@ -1,8 +1,3 @@
-"""
-Basic metrics configuration module.
-Contains only the essential metrics imports and basic functions.
-"""
-
 from .metrics.levels_metrics import LEVELS_METRICS
 from .metrics.occurrence_statistics_metrics import (
     OCCURRENCE_STATISTICS_METRICS,
@@ -27,12 +22,6 @@ from .metrics.sessions_interactions import (
 
 
 def get_all_metrics():
-    """
-    Повертає всі доступні метрики, об'єднані в один словник.
-
-    Returns:
-        dict: Словник з усіма метриками
-    """
     all_metrics = {}
     all_metrics.update(LEVELS_METRICS)
     all_metrics.update(OCCURRENCE_STATISTICS_METRICS)
